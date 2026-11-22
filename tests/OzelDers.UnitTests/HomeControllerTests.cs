@@ -1,27 +1,46 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OzelDers.Web.Controllers;
 using OzelDers.Web.Models;
+using OzelDers.Web.Services;
+using OzelDers.Web.Services.Abstractions;
+using OzelDers.Web.ViewModels.Home;
 
 namespace OzelDers.UnitTests;
 
 public class HomeControllerTests
 {
-    [Fact]
-    public void Index_ReturnsViewResult()
+    private static HomeController CreateController()
     {
-        var controller = new HomeController(NullLogger<HomeController>.Instance);
+        var services = new ServiceCollection();
+        services.AddScoped<ISystemInfoService, SystemInfoService>();
+        using var provider = services.BuildServiceProvider();
+        var systemInfoService = provider.GetRequiredService<ISystemInfoService>();
+
+        return new HomeController(NullLogger<HomeController>.Instance, systemInfoService);
+    }
+
+    [Fact]
+    public void Index_ReturnsViewResultWithHomeIndexViewModel()
+    {
+        var controller = CreateController();
 
         var result = controller.Index();
 
-        Assert.IsType<ViewResult>(result);
+        var viewResult = Assert.IsType<ViewResult>(result);
+        var model = Assert.IsType<HomeIndexViewModel>(viewResult.Model);
+        Assert.Equal("Özel Ders Yönetim Sistemi", model.ApplicationName);
+        Assert.Equal("ÖDYS", model.ShortCode);
+        Assert.Equal("Özel Ders Yönetim Sistemi (ÖDYS)", model.FullTitle);
+        Assert.False(string.IsNullOrWhiteSpace(model.Description));
     }
 
     [Fact]
     public void Privacy_ReturnsViewResult()
     {
-        var controller = new HomeController(NullLogger<HomeController>.Instance);
+        var controller = CreateController();
 
         var result = controller.Privacy();
 
@@ -31,12 +50,10 @@ public class HomeControllerTests
     [Fact]
     public void Error_ReturnsViewResultWithErrorViewModel()
     {
-        var controller = new HomeController(NullLogger<HomeController>.Instance)
+        var controller = CreateController();
+        controller.ControllerContext = new ControllerContext
         {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = new DefaultHttpContext { TraceIdentifier = "test-trace-id" }
-            }
+            HttpContext = new DefaultHttpContext { TraceIdentifier = "test-trace-id" }
         };
 
         var result = controller.Error();

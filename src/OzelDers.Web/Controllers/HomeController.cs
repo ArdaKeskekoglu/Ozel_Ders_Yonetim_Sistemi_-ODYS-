@@ -1,21 +1,34 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using OzelDers.Web.Models;
+using OzelDers.Web.Services.Abstractions;
+using OzelDers.Web.ViewModels.Home;
 
 namespace OzelDers.Web.Controllers;
 
 public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
+    private readonly ISystemInfoService _systemInfoService;
 
-    public HomeController(ILogger<HomeController> logger)
+    public HomeController(
+        ILogger<HomeController> logger,
+        ISystemInfoService systemInfoService)
     {
         _logger = logger;
+        _systemInfoService = systemInfoService;
     }
 
     public IActionResult Index()
     {
-        return View();
+        var viewModel = new HomeIndexViewModel
+        {
+            ApplicationName = _systemInfoService.GetApplicationName(),
+            ShortCode = _systemInfoService.GetShortCode(),
+            Description = _systemInfoService.GetDescription()
+        };
+
+        return View(viewModel);
     }
 
     public IActionResult Privacy()
