@@ -45,6 +45,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<ISystemInfoService, SystemInfoService>();
 builder.Services.AddScoped<INavigationService, NavigationService>();
+builder.Services.AddScoped<ITeacherAccountService, TeacherAccountService>();
 
 var app = builder.Build();
 

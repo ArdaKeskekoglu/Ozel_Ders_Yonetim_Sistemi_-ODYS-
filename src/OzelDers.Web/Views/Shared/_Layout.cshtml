@@ -70,7 +70,7 @@
                         </span>
                     </div>
 
-                    <!-- Sağ Üst Aksiyonlar: Bildirimler, Profil, Ayarlar -->
+                    <!-- Sağ Üst Aksiyonlar: Bildirimler, Profil, Ayarlar ve Hesap -->
                     <nav aria-label="Kullanıcı ve Ayarlar Menüsü">
                         <ul class="nav align-items-center gap-1">
                             @foreach (var topItem in topbarItems)
@@ -83,6 +83,23 @@
                                        aria-current="@(topItem.IsActive ? "page" : null)">
                                         <span aria-hidden="true">@topItem.IconText</span>
                                         <span class="d-none d-sm-inline ms-1">@topItem.Title</span>
+                                    </a>
+                                </li>
+                            }
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                <li class="nav-item ms-1">
+                                    <span class="odys-status-pill odys-status-active">@User.Identity.Name</span>
+                                </li>
+                            }
+                            else
+                            {
+                                <li class="nav-item ms-1">
+                                    <a class="btn btn-primary btn-sm odys-touch-target px-3 fw-semibold"
+                                       asp-area=""
+                                       asp-controller="Account"
+                                       asp-action="Register">
+                                        Kayıt Ol
                                     </a>
                                 </li>
                             }
@@ -133,6 +150,17 @@
                                     </a>
                                 </li>
                             }
+                            @if (User.Identity?.IsAuthenticated != true)
+                            {
+                                <li class="nav-item mt-2">
+                                    <a class="btn btn-primary w-100 odys-touch-target justify-content-center fw-semibold"
+                                       asp-area=""
+                                       asp-controller="Account"
+                                       asp-action="Register">
+                                        Yeni Öğretmen Kaydı
+                                    </a>
+                                </li>
+                            }
                         </ul>
                     </div>
                 </div>
@@ -141,6 +169,13 @@
             <!-- Ana Sayfa İçeriği -->
             <main role="main" class="odys-content flex-grow-1 p-3 p-md-4">
                 <div class="container-fluid">
+                    @if (TempData["SuccessMessage"] is string successMessage)
+                    {
+                        <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                            @successMessage
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+                        </div>
+                    }
                     @RenderBody()
                 </div>
             </main>
