@@ -12,13 +12,18 @@
                 Yalnızca kendi hesabınıza kayıtlı öğrencileri görüntüleyebilir, arayabilir ve durumlarına göre filtreleyebilirsiniz.
             </p>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
             <span class="badge bg-primary-subtle text-primary-emphasis px-3 py-2">
                 Aktif: @Model.ActiveCount
             </span>
             <span class="badge bg-secondary-subtle text-secondary-emphasis px-3 py-2">
                 Arşiv: @Model.ArchivedCount
             </span>
+            <a class="btn btn-primary odys-touch-target px-3 fw-semibold"
+               asp-controller="Students"
+               asp-action="Create">
+                + Yeni Öğrenci Ekle
+            </a>
         </div>
     </div>
 
@@ -73,9 +78,14 @@
     <section class="odys-card p-5 text-center" aria-label="Boş Öğrenci Listesi">
         <div class="display-6 mb-3" aria-hidden="true">👥</div>
         <h2 class="h5 fw-bold mb-2">Henüz kayıtlı öğrenciniz bulunmuyor</h2>
-        <p class="text-muted small mx-auto mb-0" style="max-width: 480px;">
+        <p class="text-muted small mx-auto mb-3" style="max-width: 480px;">
             Özel ders verdiğiniz öğrencileri eklediğinizde iletişim bilgileri, ders türleri, haftalık programları ve bakiye durumları bu ekranda listelenecektir.
         </p>
+        <a class="btn btn-primary odys-touch-target px-4 fw-semibold"
+           asp-controller="Students"
+           asp-action="Create">
+            + İlk Öğrencinizi Ekleyin
+        </a>
     </section>
 }
 else if (!Model.HasFilteredResults)

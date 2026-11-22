@@ -34,4 +34,37 @@ public class StudentsController : Controller
 
         return View(viewModel);
     }
+
+    [HttpGet]
+    public IActionResult Create()
+    {
+        return View(new CreateStudentViewModel());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(
+        CreateStudentViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _studentService.CreateStudentAsync(teacherId, model, cancellationToken);
+        if (!result.Succeeded || result.Student is null)
+        {
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            return View(model);
+        }
+
+        TempData["SuccessMessage"] = $"{result.Student.FullName} adlı öğrenci başarıyla eklendi.";
+        return RedirectToAction(nameof(Index));
+    }
 }

@@ -1,13 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using OzelDers.Web.Data;
+using OzelDers.Web.Domain.Entities;
 using OzelDers.Web.Services.Abstractions;
 using OzelDers.Web.ViewModels.Students;
 
 namespace OzelDers.Web.Services;
 
 /// <summary>
-/// Yalnızca oturumdaki öğretmenin kendi öğrencilerini listeleyen, isimle arayan ve
-/// aktif/arşiv durumuna göre filtreleyen servis (FR-007, FR-013..FR-015, NFR-007).
+/// Yalnızca oturumdaki öğretmenin kendi öğrencilerini listeleyen, arayan ve
+/// yeni öğrenci kaydı oluşturan servis (FR-007, FR-010..FR-021, DEC-13, NFR-007, NFR-009).
 /// </summary>
 public class StudentService : IStudentService
 {
@@ -79,5 +80,53 @@ public class StudentService : IStudentService
             ArchivedCount = archivedCount,
             Students = students
         };
+    }
+
+    public async Task<StudentOperationResult> CreateStudentAsync(
+        string teacherId,
+        CreateStudentViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            throw new UnauthorizedAccessException("Yeni öğrenci eklemek için öğretmen oturumu gereklidir.");
+        }
+
+        var firstName = model.FirstName?.Trim() ?? string.Empty;
+        var lastName = model.LastName?.Trim() ?? string.Empty;
+
+        var errors = new List<string>();
+        if (firstName.Length < 2)
+        {
+            errors.Add("Öğrenci adı en az 2 karakter olmalıdır.");
+        }
+
+        if (lastName.Length < 2)
+        {
+            errors.Add("Öğrenci soyadı en az 2 karakter olmalıdır.");
+        }
+
+        if (errors.Count > 0)
+        {
+            return new StudentOperationResult(false, null, errors);
+        }
+
+        var student = new Student
+        {
+            TeacherId = teacherId,
+            FirstName = firstName,
+            LastName = lastName,
+            PhoneNumber = string.IsNullOrWhiteSpace(model.PhoneNumber) ? null : model.PhoneNumber.Trim(),
+            Email = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim(),
+            Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim(),
+            IsArchived = false
+        };
+
+        _dbContext.Students.Add(student);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return new StudentOperationResult(true, student, Array.Empty<string>());
     }
 }
