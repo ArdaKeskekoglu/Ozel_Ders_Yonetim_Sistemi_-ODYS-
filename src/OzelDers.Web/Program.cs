@@ -48,6 +48,7 @@ builder.Services.AddScoped<ISystemInfoService, SystemInfoService>();
 builder.Services.AddScoped<INavigationService, NavigationService>();
 builder.Services.AddScoped<ITeacherAccountService, TeacherAccountService>();
 builder.Services.AddScoped<ICurrentTeacherService, CurrentTeacherService>();
+builder.Services.AddScoped<IStudentService, StudentService>();
 
 var app = builder.Build();
 
