@@ -6,11 +6,14 @@ using OzelDers.Web.ViewModels.Account;
 namespace OzelDers.Web.Services;
 
 /// <summary>
-/// Öğretmen kayıt işlemlerini doğrulayan ve Identity hata kodlarını
-/// güvenli, anlaşılır Türkçe mesajlara dönüştüren servis (FR-001, NFR-009, NFR-010).
+/// Öğretmen kayıt ve giriş doğrulama işlemlerini yürüten, Identity hata kodlarını
+/// güvenli, anlaşılır Türkçe mesajlara dönüştüren servis (FR-001, FR-002, NFR-009, NFR-010).
 /// </summary>
 public class TeacherAccountService : ITeacherAccountService
 {
+    private const string InvalidCredentialsMessage = "E-posta adresi veya şifre hatalı.";
+    private const string LockedOutMessage = "Çok fazla başarısız giriş denemesi nedeniyle hesabınız geçici olarak kilitlendi. Lütfen daha sonra tekrar deneyiniz.";
+
     private readonly UserManager<ApplicationUser> _userManager;
 
     public TeacherAccountService(UserManager<ApplicationUser> userManager)
@@ -79,6 +82,45 @@ public class TeacherAccountService : ITeacherAccountService
         }
 
         return new TeacherRegistrationResult(true, teacher, Array.Empty<string>());
+    }
+
+    public async Task<TeacherLoginValidationResult> ValidateTeacherCredentialsAsync(
+        LoginViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(model.Email) || string.IsNullOrWhiteSpace(model.Password))
+        {
+            return new TeacherLoginValidationResult(false, null, false, InvalidCredentialsMessage);
+        }
+
+        var normalizedEmail = model.Email.Trim();
+        var user = await _userManager.FindByEmailAsync(normalizedEmail);
+        if (user is null)
+        {
+            return new TeacherLoginValidationResult(false, null, false, InvalidCredentialsMessage);
+        }
+
+        if (await _userManager.IsLockedOutAsync(user))
+        {
+            return new TeacherLoginValidationResult(false, null, true, LockedOutMessage);
+        }
+
+        var passwordValid = await _userManager.CheckPasswordAsync(user, model.Password);
+        if (!passwordValid)
+        {
+            await _userManager.AccessFailedAsync(user);
+            if (await _userManager.IsLockedOutAsync(user))
+            {
+                return new TeacherLoginValidationResult(false, null, true, LockedOutMessage);
+            }
+
+            return new TeacherLoginValidationResult(false, null, false, InvalidCredentialsMessage);
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+        return new TeacherLoginValidationResult(true, user, false, null);
     }
 
     private static string MapIdentityErrorToTurkish(IdentityError error) =>

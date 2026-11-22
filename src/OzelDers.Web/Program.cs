@@ -42,10 +42,12 @@ builder.Services.ConfigureApplicationCookie(options =>
         options.ExpireTimeSpan = TimeSpan.FromHours(12);
     });
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<ISystemInfoService, SystemInfoService>();
 builder.Services.AddScoped<INavigationService, NavigationService>();
 builder.Services.AddScoped<ITeacherAccountService, TeacherAccountService>();
+builder.Services.AddScoped<ICurrentTeacherService, CurrentTeacherService>();
 
 var app = builder.Build();
 
