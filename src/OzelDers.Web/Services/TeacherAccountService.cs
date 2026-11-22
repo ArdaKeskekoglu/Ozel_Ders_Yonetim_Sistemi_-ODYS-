@@ -6,8 +6,8 @@ using OzelDers.Web.ViewModels.Account;
 namespace OzelDers.Web.Services;
 
 /// <summary>
-/// Öğretmen kayıt ve giriş doğrulama işlemlerini yürüten, Identity hata kodlarını
-/// güvenli, anlaşılır Türkçe mesajlara dönüştüren servis (FR-001, FR-002, NFR-009, NFR-010).
+/// Öğretmen kayıt, giriş doğrulama, profil düzenleme, şifre değiştirme ve
+/// güvenli token ile şifre sıfırlama işlemlerini yürüten servis (FR-001..FR-006, NFR-005, NFR-009, NFR-010).
 /// </summary>
 public class TeacherAccountService : ITeacherAccountService
 {
@@ -123,6 +123,172 @@ public class TeacherAccountService : ITeacherAccountService
         return new TeacherLoginValidationResult(true, user, false, null);
     }
 
+    public async Task<ProfileViewModel?> GetProfileAsync(
+        string teacherId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            return null;
+        }
+
+        var user = await _userManager.FindByIdAsync(teacherId);
+        if (user is null)
+        {
+            return null;
+        }
+
+        return new ProfileViewModel
+        {
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            DisplayName = user.DisplayName,
+            Email = user.Email ?? string.Empty,
+            PhoneNumber = user.PhoneNumber,
+            TimeZoneId = user.TimeZoneId,
+            CurrencyCode = user.CurrencyCode
+        };
+    }
+
+    public async Task<TeacherAccountOperationResult> UpdateProfileAsync(
+        string teacherId,
+        ProfileViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Geçerli bir öğretmen oturumu bulunamadı." });
+        }
+
+        var user = await _userManager.FindByIdAsync(teacherId);
+        if (user is null)
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Öğretmen hesabı bulunamadı." });
+        }
+
+        var firstName = model.FirstName.Trim();
+        var lastName = model.LastName.Trim();
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Ad ve soyad alanları boş bırakılamaz." });
+        }
+
+        user.FirstName = firstName;
+        user.LastName = lastName;
+        user.DisplayName = string.IsNullOrWhiteSpace(model.DisplayName)
+            ? $"{firstName} {lastName}".Trim()
+            : model.DisplayName.Trim();
+        user.PhoneNumber = string.IsNullOrWhiteSpace(model.PhoneNumber) ? null : model.PhoneNumber.Trim();
+        user.TimeZoneId = string.IsNullOrWhiteSpace(model.TimeZoneId)
+            ? "Turkey Standard Time"
+            : model.TimeZoneId.Trim();
+        user.UpdatedAtUtc = DateTime.UtcNow;
+
+        var updateResult = await _userManager.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+        {
+            var errors = updateResult.Errors
+                .Select(MapIdentityErrorToTurkish)
+                .Distinct()
+                .ToList();
+            return new TeacherAccountOperationResult(false, errors);
+        }
+
+        return new TeacherAccountOperationResult(true, Array.Empty<string>());
+    }
+
+    public async Task<TeacherAccountOperationResult> ChangePasswordAsync(
+        string teacherId,
+        ChangePasswordViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Geçerli bir öğretmen oturumu bulunamadı." });
+        }
+
+        if (!string.Equals(model.NewPassword, model.ConfirmNewPassword, StringComparison.Ordinal))
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Yeni şifre ile şifre tekrarı birbiriyle eşleşmiyor." });
+        }
+
+        var user = await _userManager.FindByIdAsync(teacherId);
+        if (user is null)
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Öğretmen hesabı bulunamadı." });
+        }
+
+        var changeResult = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+        if (!changeResult.Succeeded)
+        {
+            var errors = changeResult.Errors
+                .Select(MapIdentityErrorToTurkish)
+                .Distinct()
+                .ToList();
+            return new TeacherAccountOperationResult(false, errors);
+        }
+
+        return new TeacherAccountOperationResult(true, Array.Empty<string>());
+    }
+
+    public async Task<string?> GeneratePasswordResetTokenAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return null;
+        }
+
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user is null)
+        {
+            return null;
+        }
+
+        return await _userManager.GeneratePasswordResetTokenAsync(user);
+    }
+
+    public async Task<TeacherAccountOperationResult> ResetPasswordAsync(
+        ResetPasswordViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (!string.Equals(model.NewPassword, model.ConfirmNewPassword, StringComparison.Ordinal))
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Yeni şifre ile şifre tekrarı birbiriyle eşleşmiyor." });
+        }
+
+        if (string.IsNullOrWhiteSpace(model.Email) || string.IsNullOrWhiteSpace(model.Token))
+        {
+            return new TeacherAccountOperationResult(false, new[] { "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş." });
+        }
+
+        var user = await _userManager.FindByEmailAsync(model.Email.Trim());
+        if (user is null)
+        {
+            // Kullanıcı numaralandırma (enumeration) koruması için aynı güvenli mesajı döndür
+            return new TeacherAccountOperationResult(false, new[] { "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş." });
+        }
+
+        var resetResult = await _userManager.ResetPasswordAsync(user, model.Token, model.NewPassword);
+        if (!resetResult.Succeeded)
+        {
+            var errors = resetResult.Errors
+                .Select(MapIdentityErrorToTurkish)
+                .Distinct()
+                .ToList();
+            return new TeacherAccountOperationResult(false, errors);
+        }
+
+        return new TeacherAccountOperationResult(true, Array.Empty<string>());
+    }
+
     private static string MapIdentityErrorToTurkish(IdentityError error) =>
         error.Code switch
         {
@@ -130,6 +296,10 @@ public class TeacherAccountService : ITeacherAccountService
                 "Bu e-posta adresi ile kayıtlı bir öğretmen hesabı zaten mevcut.",
             "InvalidEmail" or "InvalidUserName" =>
                 "Lütfen geçerli bir e-posta adresi giriniz.",
+            "PasswordMismatch" =>
+                "Girdiğiniz mevcut şifre hatalı.",
+            "InvalidToken" =>
+                "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.",
             "PasswordTooShort" =>
                 "Şifre en az 8 karakter uzunluğunda olmalıdır.",
             "PasswordRequiresDigit" =>
@@ -140,6 +310,6 @@ public class TeacherAccountService : ITeacherAccountService
                 "Şifre en az bir büyük harf (A-Z) içermelidir.",
             "PasswordRequiresNonAlphanumeric" =>
                 "Şifre en az bir özel karakter içermelidir.",
-            _ => "Kayıt işlemi sırasında bilgiler doğrulanamadı. Lütfen girdiğiniz bilgileri kontrol ediniz."
+            _ => "İşlem sırasında bilgiler doğrulanamadı. Lütfen girdiğiniz bilgileri kontrol ediniz."
         };
 }
