@@ -1,4 +1,11 @@
-﻿<!DOCTYPE html>
+﻿@inject INavigationService NavigationService
+@{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "Home";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+    var sidebarItems = NavigationService.GetSidebarItems(currentController, currentAction);
+    var topbarItems = NavigationService.GetTopbarItems(currentController, currentAction);
+}
+<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="utf-8" />
@@ -9,39 +16,144 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/OzelDers.Web.styles.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand fw-bold" asp-area="" asp-controller="Home" asp-action="Index">ÖDYS</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Menüyü Aç/Kapat">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
+<body class="odys-body">
+    <div class="odys-shell">
+        <!-- Masaüstü Sol Menü (Sidebar) -->
+        <aside class="odys-sidebar d-none d-lg-flex flex-column" aria-label="Ana Yan Menü">
+            <div class="odys-sidebar-brand">
+                <a class="odys-brand-link" asp-area="" asp-controller="Home" asp-action="Index">
+                    <span class="odys-brand-badge">ÖDYS</span>
+                    <span class="odys-brand-text">Özel Ders Yönetimi</span>
+                </a>
+            </div>
+            <nav class="odys-sidebar-nav flex-grow-1" aria-label="Modül Navigasyonu">
+                <ul class="nav flex-column gap-1">
+                    @foreach (var item in sidebarItems)
+                    {
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Ana Sayfa</a>
+                            <a class="nav-link odys-nav-link @(item.IsActive ? "active" : "")"
+                               asp-area=""
+                               asp-controller="@item.Controller"
+                               asp-action="@item.Action"
+                               aria-current="@(item.IsActive ? "page" : null)">
+                                <span class="odys-nav-icon" aria-hidden="true">@item.IconText</span>
+                                <span>@item.Title</span>
+                            </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Gizlilik</a>
-                        </li>
-                    </ul>
+                    }
+                </ul>
+            </nav>
+            <div class="odys-sidebar-footer">
+                <span class="odys-status-pill odys-status-active">Sistem Hazır</span>
+            </div>
+        </aside>
+
+        <!-- Sağ Ana Alan (Üst Bar + İçerik + Alt Bilgi) -->
+        <div class="odys-main-wrapper d-flex flex-column flex-grow-1">
+            <header class="odys-topbar border-bottom bg-white">
+                <div class="container-fluid d-flex align-items-center justify-content-between py-2 px-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- Mobil Menü Açma Butonu -->
+                        <button class="btn btn-outline-secondary d-lg-none odys-touch-target"
+                                type="button"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#odysMobileNav"
+                                aria-controls="odysMobileNav"
+                                aria-label="Ana Menüyü Aç">
+                            ☰ Menü
+                        </button>
+                        <a class="navbar-brand fw-bold d-lg-none mb-0" asp-area="" asp-controller="Home" asp-action="Index">
+                            ÖDYS
+                        </a>
+                        <span class="text-muted small d-none d-md-inline">
+                            @ViewData["Title"]
+                        </span>
+                    </div>
+
+                    <!-- Sağ Üst Aksiyonlar: Bildirimler, Profil, Ayarlar -->
+                    <nav aria-label="Kullanıcı ve Ayarlar Menüsü">
+                        <ul class="nav align-items-center gap-1">
+                            @foreach (var topItem in topbarItems)
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link odys-topbar-link odys-touch-target @(topItem.IsActive ? "active" : "")"
+                                       asp-area=""
+                                       asp-controller="@topItem.Controller"
+                                       asp-action="@topItem.Action"
+                                       aria-current="@(topItem.IsActive ? "page" : null)">
+                                        <span aria-hidden="true">@topItem.IconText</span>
+                                        <span class="d-none d-sm-inline ms-1">@topItem.Title</span>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                </div>
+            </header>
+
+            <!-- Mobil Açılır Yan Menü (Offcanvas) -->
+            <div class="offcanvas offcanvas-start d-lg-none"
+                 tabindex="-1"
+                 id="odysMobileNav"
+                 aria-labelledby="odysMobileNavLabel">
+                <div class="offcanvas-header border-bottom">
+                    <h5 class="offcanvas-title fw-bold" id="odysMobileNavLabel">ÖDYS Menü</h5>
+                    <button type="button" class="btn-close odys-touch-target" data-bs-dismiss="offcanvas" aria-label="Kapat"></button>
+                </div>
+                <div class="offcanvas-body d-flex flex-column justify-content-between">
+                    <nav aria-label="Mobil Modül Navigasyonu">
+                        <ul class="nav flex-column gap-2">
+                            @foreach (var item in sidebarItems)
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link odys-nav-link odys-touch-target @(item.IsActive ? "active" : "")"
+                                       asp-area=""
+                                       asp-controller="@item.Controller"
+                                       asp-action="@item.Action"
+                                       aria-current="@(item.IsActive ? "page" : null)">
+                                        <span class="odys-nav-icon" aria-hidden="true">@item.IconText</span>
+                                        <span>@item.Title</span>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                    <div class="border-top pt-3 mt-3">
+                        <div class="small text-muted mb-2">Hesap ve Tercihler</div>
+                        <ul class="nav flex-column gap-1">
+                            @foreach (var topItem in topbarItems)
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link odys-nav-link odys-touch-target @(topItem.IsActive ? "active" : "")"
+                                       asp-area=""
+                                       asp-controller="@topItem.Controller"
+                                       asp-action="@topItem.Action">
+                                        <span class="odys-nav-icon" aria-hidden="true">@topItem.IconText</span>
+                                        <span>@topItem.Title</span>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
+
+            <!-- Ana Sayfa İçeriği -->
+            <main role="main" class="odys-content flex-grow-1 p-3 p-md-4">
+                <div class="container-fluid">
+                    @RenderBody()
+                </div>
+            </main>
+
+            <footer class="odys-footer border-top text-muted py-3 px-3 bg-white">
+                <div class="container-fluid d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2 small">
+                    <span>&copy; 2026 — Özel Ders Yönetim Sistemi (ÖDYS)</span>
+                    <a class="text-decoration-none" asp-area="" asp-controller="Home" asp-action="Privacy">Gizlilik ve Veri Güvenliği</a>
+                </div>
+            </footer>
+        </div>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - Özel Ders Yönetim Sistemi (ÖDYS) - <a asp-area="" asp-controller="Home" asp-action="Privacy">Gizlilik</a>
-        </div>
-    </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

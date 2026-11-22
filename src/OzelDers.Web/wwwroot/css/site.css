@@ -1,5 +1,6 @@
 html {
   font-size: 14px;
+  height: 100%;
 }
 
 @media (min-width: 768px) {
@@ -8,24 +9,145 @@ html {
   }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+body.odys-body {
+  min-height: 100vh;
+  margin: 0;
+  background-color: #f8fafc;
+  color: #0f172a;
 }
 
-html {
-  position: relative;
-  min-height: 100%;
+.btn:focus,
+.btn:active:focus,
+.btn-link.nav-link:focus,
+.form-control:focus,
+.form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #2563eb;
 }
 
-body {
-  margin-bottom: 60px;
+/* Ana Kabuk (Shell): Masaüstü Sol Menü + Sağ İçerik */
+.odys-shell {
+  display: flex;
+  min-height: 100vh;
 }
 
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-  color: var(--bs-secondary-color);
-  text-align: end;
+.odys-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background-color: #0f172a;
+  color: #f8fafc;
+  padding: 1.25rem 1rem;
 }
 
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-  text-align: start;
+.odys-sidebar-brand {
+  padding-bottom: 1.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.odys-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: #ffffff;
+}
+
+.odys-brand-badge {
+  background-color: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.5rem;
+  letter-spacing: 0.03em;
+}
+
+.odys-brand-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.odys-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.odys-sidebar .odys-nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.odys-sidebar .odys-nav-link.active {
+  background-color: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.offcanvas .odys-nav-link {
+  color: #1e293b;
+}
+
+.offcanvas .odys-nav-link.active {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.odys-nav-icon {
+  display: inline-flex;
+  width: 1.5rem;
+  justify-content: center;
+}
+
+.odys-sidebar-footer {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Mobil dokunma hedefi standardı (UX kuralı: en az 44px) */
+.odys-touch-target {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.odys-topbar-link {
+  color: #334155;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  font-weight: 500;
+}
+
+.odys-topbar-link:hover,
+.odys-topbar-link.active {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Durum Etiketleri (UX kuralı: renk tek başına durum anlatmamalı, metin rozeti ile birlikte kullanılmalı) */
+.odys-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.odys-status-active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.odys-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }

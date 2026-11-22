@@ -14,6 +14,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<ISystemInfoService, SystemInfoService>();
+builder.Services.AddScoped<INavigationService, NavigationService>();
 
 var app = builder.Build();
 
