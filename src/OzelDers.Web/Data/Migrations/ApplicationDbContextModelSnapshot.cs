@@ -309,6 +309,57 @@ namespace OzelDers.Web.Data.Migrations
                     b.ToTable("Students", (string)null);
                 });
 
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.Subject", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsDefault")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TeacherId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeacherId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Subjects_TeacherId_IsDefault")
+                        .HasFilter("[IsDefault] = 1 AND [IsArchived] = 0");
+
+                    b.HasIndex("TeacherId", "IsArchived")
+                        .HasDatabaseName("IX_Subjects_TeacherId_IsArchived");
+
+                    b.HasIndex("TeacherId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Subjects_TeacherId_Name");
+
+                    b.ToTable("Subjects", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -361,6 +412,17 @@ namespace OzelDers.Web.Data.Migrations
                 });
 
             modelBuilder.Entity("OzelDers.Web.Domain.Entities.Student", b =>
+                {
+                    b.HasOne("OzelDers.Web.Domain.Entities.ApplicationUser", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.Subject", b =>
                 {
                     b.HasOne("OzelDers.Web.Domain.Entities.ApplicationUser", "Teacher")
                         .WithMany()

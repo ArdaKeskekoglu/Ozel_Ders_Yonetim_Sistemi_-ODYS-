@@ -78,6 +78,7 @@ public class TeacherAuthAndOwnershipTests
             FirstName = "Deniz",
             LastName = "Acar",
             Email = "deniz@odys.local",
+            SelectedSubjects = new List<string> { "Matematik" },
             Password = "GuvenliSifre123",
             ConfirmPassword = "GuvenliSifre123"
         });
@@ -105,6 +106,7 @@ public class TeacherAuthAndOwnershipTests
             FirstName = "Selin",
             LastName = "Koç",
             Email = "selin@odys.local",
+            SelectedSubjects = new List<string> { "İngilizce" },
             Password = "GuvenliSifre123",
             ConfirmPassword = "GuvenliSifre123"
         });
@@ -160,5 +162,49 @@ public class TeacherAuthAndOwnershipTests
 
         Assert.Equal(2, filtered.Count);
         Assert.All(filtered, item => Assert.Equal("teacher-1", item.TeacherId));
+    }
+
+    [Fact]
+    public async Task SubjectOwnership_IsolatesSubjectsBetweenTeachersAndRejectsCrossTeacherAccess()
+    {
+        using var provider = CreateServiceProvider(nameof(SubjectOwnership_IsolatesSubjectsBetweenTeachersAndRejectsCrossTeacherAccess));
+        var service = provider.GetRequiredService<ITeacherAccountService>();
+        var dbContext = provider.GetRequiredService<ApplicationDbContext>();
+
+        var teacher1 = await service.RegisterTeacherAsync(new RegisterViewModel
+        {
+            FirstName = "Ayşe",
+            LastName = "Demir",
+            Email = "ayse@odys.local",
+            SelectedSubjects = new List<string> { "Matematik", "Geometri" },
+            Password = "GuvenliSifre123",
+            ConfirmPassword = "GuvenliSifre123"
+        });
+
+        var teacher2 = await service.RegisterTeacherAsync(new RegisterViewModel
+        {
+            FirstName = "Mehmet",
+            LastName = "Kaya",
+            Email = "mehmet@odys.local",
+            SelectedSubjects = new List<string> { "Fizik" },
+            Password = "GuvenliSifre123",
+            ConfirmPassword = "GuvenliSifre123"
+        });
+
+        Assert.NotNull(teacher1.User);
+        Assert.NotNull(teacher2.User);
+
+        var teacher1Guard = CreateCurrentTeacherService(teacher1.User.Id);
+
+        var teacher1Subjects = await teacher1Guard
+            .FilterByCurrentTeacher(dbContext.Subjects)
+            .ToListAsync();
+
+        Assert.Equal(2, teacher1Subjects.Count);
+        Assert.All(teacher1Subjects, s => Assert.Equal(teacher1.User.Id, s.TeacherId));
+
+        var teacher2Subject = await dbContext.Subjects.SingleAsync(s => s.TeacherId == teacher2.User.Id);
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            teacher1Guard.EnsureOwnership(teacher2Subject));
     }
 }

@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OzelDers.Web.Data;
 using OzelDers.Web.Domain.Common;
+using OzelDers.Web.Domain.Entities;
 
 namespace OzelDers.UnitTests;
 
@@ -72,5 +75,96 @@ public class ApplicationDbContextTests
         var migrations = context.Database.GetMigrations().ToList();
 
         Assert.Contains(migrations, m => m.EndsWith("_InitialCreate", StringComparison.Ordinal));
+        Assert.Contains(migrations, m => m.EndsWith("_AddSubjectAndDefaultSubjectInfrastructure", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SqlServerDatabase_CanConnectAndVerifyTeacherRegistrationWithDefaultSubjectInRolledBackTransaction()
+    {
+        const string connectionString =
+            "Server=localhost\\SQLEXPRESS;Database=OzelDersDb;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True";
+
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddLogging();
+        services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseSqlServer(connectionString));
+
+        services.AddIdentityCore<OzelDers.Web.Domain.Entities.ApplicationUser>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength = 8;
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireNonAlphanumeric = false;
+            })
+            .AddRoles<Microsoft.AspNetCore.Identity.IdentityRole>()
+            .AddEntityFrameworkStores<ApplicationDbContext>();
+
+        using var provider = services.BuildServiceProvider();
+        var dbContext = provider.GetRequiredService<ApplicationDbContext>();
+        var userManager = provider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<OzelDers.Web.Domain.Entities.ApplicationUser>>();
+
+        Assert.True(await dbContext.Database.CanConnectAsync());
+
+        // Mevcut verilere zarar vermemek için tüm canlı SQL Server doğrulamasını dış transaction içinde çalıştırıp geri alıyoruz
+        await using var tx = await dbContext.Database.BeginTransactionAsync();
+
+        var testEmail = $"sqlverify.{Guid.NewGuid():N}@odys.local";
+        var teacher = new OzelDers.Web.Domain.Entities.ApplicationUser
+        {
+            UserName = testEmail,
+            Email = testEmail,
+            FirstName = "SqlTest",
+            LastName = "Öğretmen",
+            DisplayName = "SqlTest Öğretmen"
+        };
+
+        var createUserResult = await userManager.CreateAsync(teacher, "GuvenliSifre123");
+        Assert.True(createUserResult.Succeeded);
+
+        var subjects = new[]
+        {
+            new OzelDers.Web.Domain.Entities.Subject
+            {
+                TeacherId = teacher.Id,
+                Name = "Matematik",
+                IsDefault = true,
+                IsArchived = false
+            },
+            new OzelDers.Web.Domain.Entities.Subject
+            {
+                TeacherId = teacher.Id,
+                Name = "Geometri",
+                IsDefault = false,
+                IsArchived = false
+            }
+        };
+
+        dbContext.Subjects.AddRange(subjects);
+        await dbContext.SaveChangesAsync();
+
+        var persistedSubjects = await dbContext.Subjects
+            .AsNoTracking()
+            .Where(s => s.TeacherId == teacher.Id)
+            .OrderBy(s => s.Id)
+            .ToListAsync();
+
+        Assert.Equal(2, persistedSubjects.Count);
+        var defaultSubject = Assert.Single(persistedSubjects, s => s.IsDefault);
+        Assert.Equal("Matematik", defaultSubject.Name);
+
+        // Filtered unique index [IX_Subjects_TeacherId_IsDefault] doğrulaması:
+        // Aynı öğretmene ikinci bir aktif varsayılan ders eklenmeye çalışıldığında SQL Server reddetmeli
+        dbContext.Subjects.Add(new OzelDers.Web.Domain.Entities.Subject
+        {
+            TeacherId = teacher.Id,
+            Name = "Fizik",
+            IsDefault = true,
+            IsArchived = false
+        });
+        await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync());
+
+        await tx.RollbackAsync();
     }
 }

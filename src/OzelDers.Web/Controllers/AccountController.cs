@@ -133,6 +133,13 @@ public class AccountController : Controller
         var teacherId = _currentTeacherService.GetRequiredTeacherId();
         if (!ModelState.IsValid)
         {
+            var currentProfile = await _teacherAccountService.GetProfileAsync(teacherId, cancellationToken);
+            if (currentProfile is not null)
+            {
+                model.DefaultSubjectName = currentProfile.DefaultSubjectName;
+                model.ActiveSubjectNames = currentProfile.ActiveSubjectNames;
+            }
+
             return View(model);
         }
 
@@ -142,6 +149,13 @@ public class AccountController : Controller
             foreach (var error in result.Errors)
             {
                 ModelState.AddModelError(string.Empty, error);
+            }
+
+            var currentProfile = await _teacherAccountService.GetProfileAsync(teacherId, cancellationToken);
+            if (currentProfile is not null)
+            {
+                model.DefaultSubjectName = currentProfile.DefaultSubjectName;
+                model.ActiveSubjectNames = currentProfile.ActiveSubjectNames;
             }
 
             return View(model);

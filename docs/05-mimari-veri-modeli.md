@@ -41,12 +41,12 @@ Bütün tablolar için uygun `Id`, `CreatedAt`, `UpdatedAt` ve concurrency sür�
 |---|---|
 | `Teachers` | `Id` (Identity kullanıcıyla ilişki), `DisplayName`, `TimeZoneId` |
 | `Students` | `Id`, `TeacherId`, `FirstName`, `LastName`, `Phone?`, `Email?`, `IsArchived`, `Notes?` |
-| `Subjects` | `Id`, `TeacherId`, `Name`, `IsArchived` |
-| `StudentSubjects` | `Id`, `StudentId`, `SubjectId`, `HourlyRate decimal(18,2)`, `DefaultDurationMinutes`, `WeeklyTargetCount`, `IsActive` |
+| `Subjects` | `Id`, `TeacherId`, `Name`, `IsDefault`, `IsArchived` |
+| `StudentSubjects` | `Id`, `StudentId`, `SubjectId`, `HourlyRate decimal(18,2)`, `DefaultDurationMinutes` (oturum süresi), `WeeklyTargetCount` (haftalık ayrı oturum sayısı), `IsActive` |
 | `TeacherAvailabilities` | `Id`, `TeacherId`, `DayOfWeek`, `StartLocalTime`, `EndLocalTime` |
 | `StudentAvailabilities` | `Id`, `StudentId`, `DayOfWeek`, `StartLocalTime`, `EndLocalTime` |
 | `AvailabilityExceptions` | `Id`, `TeacherId`, `StudentId?`, `Date`, `IsAvailable`, `StartLocalTime?`, `EndLocalTime?`, `Reason?` |
-| `Lessons` | `Id`, `TeacherId`, `StudentId`, `SubjectId`, `StartUtc`, `EndUtc`, `FeeSnapshot`, `PlanningStatus`, `AttendanceStatus`, `FeeDecision`, `IsLocked`, `RecurringRuleId?`, `SourceDraftId?`, `RowVersion` |
+| `Lessons` | `Id`, `StudentSubjectId` (tek öğrenci–ders türü bağı; `StudentId`/`SubjectId`/`TeacherId` tekrarı tutulmaz), `StartUtc`, `EndUtc`, `FeeSnapshot`, `PlanningStatus`, `AttendanceStatus`, `FeeDecision`, `IsLocked`, `RecurringRuleId?`, `SourceDraftId?`, `RowVersion` |
 | `LessonCharges` | `Id`, `LessonId` (unique for initial model), `Amount decimal(18,2)`, `State`, `Reason?` |
 | `Payments` | `Id`, `TeacherId`, `StudentId`, `Amount decimal(18,2)`, `ReceivedAtUtc`, `Method?`, `Note?`, `VoidedAtUtc?` |
 | `PaymentAllocations` | `Id`, `PaymentId`, `LessonChargeId`, `Amount decimal(18,2)` |
@@ -59,8 +59,12 @@ Bütün tablolar için uygun `Id`, `CreatedAt`, `UpdatedAt` ve concurrency sür�
 
 ### Önemli kararlar
 
-- Ders türü, öğrencinin ilişkili olduğu öğretmenin ders türü olmalıdır. Aynı öğretmene aitlik kontrolleri gerekli.
-- `FeeSnapshot`, geçmiş dersin ücretinin güncel öğrenci ücretinden etkilenmemesini sağlar.
+- Öğretmen kayıt olurken en az bir ders türü tanımlamak zorundadır ve ilk ders otomatik olarak varsayılan (`Subjects.IsDefault = true`) olur.
+- Bir öğrenciye birden fazla ders türü (`StudentSubjects`) atanabilir; ancak **her ders oturumu (`Lessons`) yalnızca tek bir `StudentSubjectId` kaydına bağlanır** (tek bir ders oturumuna birden fazla ders türü atanamaz).
+- Gereksiz veri tekrarından ve çelişki riskinden kaçınmak için `Lessons` tablosunda `StudentId`, `SubjectId` ve `TeacherId` sütunları tekrar tutulmaz; tüm sahiplik ve ders türü bilgisi `StudentSubjectId -> StudentSubjects -> (Student, Subject)` üzerinden tek kaynaktan elde edilir.
+- `StudentSubjects.WeeklyTargetCount` haftalık ayrı ders oturumu adedini, `DefaultDurationMinutes` ise her bir oturumun dakika cinsinden süresini ifade eder (örn. haftada 2 oturum × 60 dk ile 1 oturum × 120 dk birbirinden farklıdır).
+- Ders türü, öğrencinin ilişkili olduğu öğretmenin ders türü olmalıdır (`Student.TeacherId == Subject.TeacherId`). Aynı öğretmene aitlik kontrolleri zorunludur.
+- `FeeSnapshot`, geçmiş dersin ücretinin güncel öğrenci ücretinden veya varsayılan ders değişikliğinden etkilenmemesini sağlar.
 - Katılım ve planlama ayrı durumlar; parasal ödeme durumu tahakkuk ve dağıtımdan türetilir.
 - Öğrenciyi arşivlemek dersleri/ödemeleri silmez.
 - Tahsilat kaydedildikten sonra silmek yerine düzeltme/void işlemi ve iz bırakma uygundur.
@@ -75,8 +79,7 @@ erDiagram
   TEACHERS ||--o{ SUBJECTS : defines
   STUDENTS ||--o{ STUDENT_SUBJECTS : enrolls
   SUBJECTS ||--o{ STUDENT_SUBJECTS : used_in
-  STUDENTS ||--o{ LESSONS : attends
-  SUBJECTS ||--o{ LESSONS : classifies
+  STUDENT_SUBJECTS ||--o{ LESSONS : schedules_single_subject_session
   LESSONS ||--o| LESSON_CHARGES : generates
   STUDENTS ||--o{ PAYMENTS : pays
   PAYMENTS ||--o{ PAYMENT_ALLOCATIONS : contains
@@ -87,8 +90,12 @@ erDiagram
 
 ## Veri bütünlüğü ve sorgulama
 
-- İndeksler: `Lessons(TeacherId, StartUtc)`, `Students(TeacherId, IsArchived)`, `ScheduleDrafts(TeacherId, WeekStartDate, Status)`, `Payments(StudentId, ReceivedAtUtc)`.
-- Unique: öğretmen bazında etkin ders türü adı; tahakkuk için ders başına uygun benzersizlik; taslak onay idempotency anahtarı.
+- İndeksler: `Lessons(StudentSubjectId, StartUtc)`, `Students(TeacherId, IsArchived)`, `Subjects(TeacherId, IsArchived)`, `ScheduleDrafts(TeacherId, WeekStartDate, Status)`, `Payments(StudentId, ReceivedAtUtc)`.
+- Unique:
+  - Öğretmen bazında ders türü adı (`IX_Subjects_TeacherId_Name` — arşivlenmiş bir ders yeniden aynı adla eklenmek istendiğinde mükerrer satır açmak yerine mevcut arşivli kayıt yeniden etkinleştirilir).
+  - Öğretmen başına en fazla bir aktif varsayılan ders (`IX_Subjects_TeacherId_IsDefault WHERE IsDefault = 1 AND IsArchived = 0`); en az bir aktif ders varken mutlaka bir varsayılan ders bulunması kuralı servis katmanında korunur.
+  - Öğrenci başına ders türü tekilliği (`IX_StudentSubjects_StudentId_SubjectId`).
+  - Tahakkuk için ders başına uygun benzersizlik; taslak onay idempotency anahtarı.
 - Çakışma kontrolü: `existing.StartUtc < candidate.EndUtc && candidate.StartUtc < existing.EndUtc` (iptaller hariç).
 - **Yalnızca uygulama katmanında ön kontrol yeterli değildir**; eşzamanlı onay/manuel ekleme yarışını transaction, uygun yalıtım/kilit veya benzeri güvenli stratejiyle önle.
 - İlgili öğretmen, öğrenci ve ders türünün sahiplik kontrolleri hem sorgulamada hem kaydetmede gereklidir.

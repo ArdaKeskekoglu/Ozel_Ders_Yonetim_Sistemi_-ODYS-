@@ -33,3 +33,7 @@ Her fazda aşağıdaki adımlar sırasıyla ve eksiksiz uygulanır:
 - **Git Güvenliği:** `git push --force` kullanılmaz ve Git geçmişi izinsiz değiştirilmez.
 - **Veritabanı Güvenliği:** Veritabanı veya mevcut veriler izinsiz silinmez; yıkıcı migration işlemlerinden önce onay alınır.
 - **Mimari Kararlar:** Önemli mimari ve teknoloji değişiklikleri uygulanmadan önce kullanıcıya açıklanır, açık konular için `docs/11-acik-kararlar.md` referans alınır.
+- **Ders Türü ve Ders Oturumu Kuralları:**
+  - Öğretmen kayıt olurken en az bir ders türü tanımlamak zorundadır ve ilk ders otomatik olarak varsayılan ders (`IsDefault = true`) olur.
+  - Bir öğrenciye birden fazla ders türü (`StudentSubjects`) atanabilir ve her ders türü için saatlik ücret (`HourlyRate`), oturum süresi (`DefaultDurationMinutes`) ve haftalık oturum sayısı (`WeeklyTargetCount`) ayrı tutulur.
+  - Ancak her ders oturumu (`Lessons`) **yalnızca tek bir ders türüne** (`StudentSubjectId` üzerinden) ait olabilir; tek bir ders oturumuna birden fazla ders türü atanamaz.

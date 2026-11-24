@@ -16,7 +16,8 @@
 2. Otomatik planlama **yalnızca seçilen tek hafta** için yapılır.
 3. Mevcut dersleri öğretmen **sabit** veya **değiştirilebilir** olarak seçer.
 4. İlk sürümde sadece **öğretmen** hesabı vardır; öğrenci paneli yoktur.
-5. Öğretmen birden fazla ders türü verir; öğrenci/ders türü bazlı ücret tanımlanabilir.
+5. Öğretmen kayıt olurken **en az bir ders türü** seçmek veya tanımlamak zorundadır; ilk ders otomatik olarak öğretmenin **varsayılan dersi** olur. Öğretmen sonradan yeni ders türleri ekleyebilir ve varsayılan dersini değiştirebilir.
+6. Bir öğrenciye farklı saatlik ücret, ders süresi ve haftalık oturum hedefleriyle **birden fazla ders türü** atanabilir (`StudentSubjects`); ancak takvimdeki **her bir ders oturumu (`Lessons`) yalnızca tek bir ders türüne** ait olabilir.
 
 ## Modüller
 

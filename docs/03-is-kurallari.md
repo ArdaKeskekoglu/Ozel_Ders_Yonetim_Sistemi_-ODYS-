@@ -47,6 +47,10 @@ flowchart TD
 - `BR-13`: Öğrenci arşivlense bile geçmiş dersler ve finansal kayıtlar korunur; kişisel veri saklama/silme yükümlülükleri ayrıca ele alınır.
 - `BR-14`: Öğretmenin erişim yetkisi her işlemde sunucu tarafında doğrulanır; gelen `TeacherId` değerine güvenilmez.
 - `BR-15`: Aynı ders için gereksiz tekrarlanan tahakkuk oluşmaz; özgün ilişki veya işleme özel kimlik kullanılır.
+- `BR-16`: Öğretmen kayıt olurken en az bir ders türü tanımlamak zorundadır ve ilk ders otomatik olarak varsayılan ders (`IsDefault = true`) olur. Öğretmenin en az bir aktif dersi varken mutlaka tam olarak bir aktif varsayılan dersi bulunur.
+- `BR-17`: Bir öğrenciye aynı öğretmenden birden fazla ders türü (`StudentSubjects`) atanabilir ve her ders türü için saatlik ücret (`HourlyRate`), oturum süresi (`DefaultDurationMinutes`) ve haftalık oturum sayısı (`WeeklyTargetCount`) ayrı tanımlanır.
+- `BR-18`: **Bir ders oturumu (`Lesson`) yalnızca tek bir ders türüne (`StudentSubjectId`) ait olabilir.** Aynı ders oturumuna birden fazla ders türü atanamaz ve yalnızca öğrenciye atanmış ders türü kullanılabilir.
+- `BR-19`: Öğretmenin varsayılan dersini değiştirmesi veya öğrenci-ders ücretini güncellemesi, geçmişte oluşturulmuş ders oturumlarının ders türünü ve ücret snapshot'ını (`FeeSnapshot`) değiştirmez.
 
 ## Örnek durum tablosu
 

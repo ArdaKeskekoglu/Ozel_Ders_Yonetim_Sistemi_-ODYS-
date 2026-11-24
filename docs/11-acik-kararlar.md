@@ -17,9 +17,10 @@ Aşağıdaki maddeler **henüz kullanıcı tarafından kesinleştirilmiş karar 
 | DEC-11 | Bildirim kanalı ve zamanlaması ne olacak? | Önce uygulama içi bekleyen işler, harici bildirim sonra |
 | DEC-12 | Ücret ve ders değişikliklerinde denetim kaydının ayrıntı düzeyi? | Yeterli olay kaydı; gereksiz kişisel bilgi yok |
 | DEC-13 | Öğrenci iletişim bilgileri zorunlu mu? | Ad-soyad zorunlu, telefon/e-posta isteğe bağlı |
-| DEC-14 | Ders türlerinin standart listesi mi, özel isim mi? | Öğretmen serbestçe tanımlar |
+| DEC-14 | Ders türlerinin standart listesi mi, özel isim mi? | **Kesinleşti (2026-11-24):** Öğretmen kayıt olurken önerilen derslerden seçebilir ve/veya serbestçe tanımlayabilir (en az 1 ders zorunlu, ilk ders varsayılan olur). |
 | DEC-15 | Üretimde barındırma, yedekleme, hukuk süreçleri | Ürünleşme aşamasında ayrıca belirle |
 
 ## Değişiklik günlüğü
 
 - **2026-10-27 — İlk dokümantasyon paketi:** Önceki görüşmelerde kesinleşen 5 ana ürün kararı işlendi; diğer konular öneri veya açık karar olarak ayrıştırıldı.
+- **2026-11-24 — Ders türleri ve ders oturumu kuralları güncellemesi:** Öğretmen kaydında zorunlu ders türü ve varsayılan ders (`IsDefault`), öğrenciye çoklu ders türü atanabilmesi (`StudentSubjects`: `HourlyRate`, `DefaultDurationMinutes`, `WeeklyTargetCount`) ve her ders oturumunun (`Lessons`) yalnızca tek bir ders türüne (`StudentSubjectId`) ait olması kuralları kesinleştirildi.

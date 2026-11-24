@@ -39,9 +39,9 @@ public class TeacherProfileAndPasswordTests
     }
 
     [Fact]
-    public async Task UpdateProfileAsync_UpdatesAuthenticatedTeacherProfileFields()
+    public async Task UpdateProfileAsync_UpdatesAuthenticatedTeacherProfileFieldsAndReturnsDefaultSubject()
     {
-        using var provider = CreateServiceProvider(nameof(UpdateProfileAsync_UpdatesAuthenticatedTeacherProfileFields));
+        using var provider = CreateServiceProvider(nameof(UpdateProfileAsync_UpdatesAuthenticatedTeacherProfileFieldsAndReturnsDefaultSubject));
         var service = provider.GetRequiredService<ITeacherAccountService>();
 
         var reg = await service.RegisterTeacherAsync(new RegisterViewModel
@@ -50,6 +50,7 @@ public class TeacherProfileAndPasswordTests
             LastName = "Çelik",
             Email = "hakan@odys.local",
             PhoneNumber = "0500 111 22 33",
+            SelectedSubjects = new List<string> { "Matematik", "Geometri" },
             Password = "GuvenliSifre123",
             ConfirmPassword = "GuvenliSifre123"
         });
@@ -75,6 +76,64 @@ public class TeacherProfileAndPasswordTests
         Assert.Equal("0532 999 88 77", updatedProfile.PhoneNumber);
         Assert.Equal("UTC", updatedProfile.TimeZoneId);
         Assert.Equal("hakan@odys.local", updatedProfile.Email);
+        Assert.Equal("Matematik", updatedProfile.DefaultSubjectName);
+        Assert.Equal(new[] { "Matematik", "Geometri" }, updatedProfile.ActiveSubjectNames);
+    }
+
+    [Fact]
+    public async Task LegacyTeacherWithoutSubjects_CanLogInAndDefineInitialDefaultSubjectViaProfile()
+    {
+        using var provider = CreateServiceProvider(nameof(LegacyTeacherWithoutSubjects_CanLogInAndDefineInitialDefaultSubjectViaProfile));
+        var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
+        var service = provider.GetRequiredService<ITeacherAccountService>();
+        var dbContext = provider.GetRequiredService<ApplicationDbContext>();
+
+        // Faz 7 güncellemesinden önce kayıt olmuş, henüz ders türü bulunmayan mevcut öğretmen hesabı
+        var legacyTeacher = new ApplicationUser
+        {
+            UserName = "eski.ogretmen@odys.local",
+            Email = "eski.ogretmen@odys.local",
+            FirstName = "Kemal",
+            LastName = "Uçar"
+        };
+        var createResult = await userManager.CreateAsync(legacyTeacher, "GuvenliSifre123");
+        Assert.True(createResult.Succeeded);
+
+        // 1) Mevcut öğretmen sorunsuz giriş yapabilmeli
+        var loginResult = await service.ValidateTeacherCredentialsAsync(new LoginViewModel
+        {
+            Email = "eski.ogretmen@odys.local",
+            Password = "GuvenliSifre123"
+        });
+        Assert.True(loginResult.Succeeded);
+
+        // 2) Profilini açtığında rastgele ders atanmamış olmalı
+        var initialProfile = await service.GetProfileAsync(legacyTeacher.Id);
+        Assert.NotNull(initialProfile);
+        Assert.Null(initialProfile.DefaultSubjectName);
+        Assert.False(initialProfile.HasAnyActiveSubject);
+
+        // 3) Profil üzerinden ilk (varsayılan) dersini tanımlayabilmeli
+        var updateResult = await service.UpdateProfileAsync(
+            legacyTeacher.Id,
+            new ProfileViewModel
+            {
+                FirstName = "Kemal",
+                LastName = "Uçar",
+                TimeZoneId = "Turkey Standard Time",
+                InitialSubjectName = " Fizik "
+            });
+        Assert.True(updateResult.Succeeded);
+
+        var updatedProfile = await service.GetProfileAsync(legacyTeacher.Id);
+        Assert.NotNull(updatedProfile);
+        Assert.True(updatedProfile.HasAnyActiveSubject);
+        Assert.Equal("Fizik", updatedProfile.DefaultSubjectName);
+
+        var savedSubject = await dbContext.Subjects.SingleAsync(s => s.TeacherId == legacyTeacher.Id);
+        Assert.Equal("Fizik", savedSubject.Name);
+        Assert.True(savedSubject.IsDefault);
+        Assert.False(savedSubject.IsArchived);
     }
 
     [Fact]
@@ -88,12 +147,12 @@ public class TeacherProfileAndPasswordTests
             FirstName = "Merve",
             LastName = "Aslan",
             Email = "merve@odys.local",
+            SelectedSubjects = new List<string> { "Biyoloji" },
             Password = "EskiSifre123",
             ConfirmPassword = "EskiSifre123"
         });
         Assert.NotNull(reg.User);
 
-        // Yanlış mevcut şifre reddedilmeli
         var wrongCurrent = await service.ChangePasswordAsync(
             reg.User.Id,
             new ChangePasswordViewModel
@@ -105,7 +164,6 @@ public class TeacherProfileAndPasswordTests
         Assert.False(wrongCurrent.Succeeded);
         Assert.Contains("Girdiğiniz mevcut şifre hatalı.", wrongCurrent.Errors);
 
-        // Doğru mevcut şifre ile güncelleme başarılı olmalı
         var validChange = await service.ChangePasswordAsync(
             reg.User.Id,
             new ChangePasswordViewModel
@@ -135,12 +193,12 @@ public class TeacherProfileAndPasswordTests
             FirstName = "Kaan",
             LastName = "Öztürk",
             Email = "kaan@odys.local",
+            SelectedSubjects = new List<string> { "Kimya" },
             Password = "IlkSifre123",
             ConfirmPassword = "IlkSifre123"
         });
         Assert.True(reg.Succeeded);
 
-        // Geçersiz token reddedilmeli
         var invalidReset = await service.ResetPasswordAsync(new ResetPasswordViewModel
         {
             Email = "kaan@odys.local",
@@ -151,7 +209,6 @@ public class TeacherProfileAndPasswordTests
         Assert.False(invalidReset.Succeeded);
         Assert.Contains("Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.", invalidReset.Errors);
 
-        // Geçerli kriptografik token ile sıfırlama başarılı olmalı
         var validToken = await service.GeneratePasswordResetTokenAsync("kaan@odys.local");
         Assert.False(string.IsNullOrWhiteSpace(validToken));
 

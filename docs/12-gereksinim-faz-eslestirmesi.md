@@ -4,9 +4,9 @@ Bu tablo planlama amaçlıdır; kesin kabul için her fazın testleri ve ilgili 
 
 | Gereksinim aralığı | Ana fazlar | Açıklama |
 |---|---|---|
-| FR-001–FR-009 | 6–9 | Hesap, kimlik, profil; güvenlik kontrolleri sürekli |
+| FR-001–FR-009 | 6–9 | Hesap, kayıtta zorunlu/varsayılan ders türü, kimlik, profil; güvenlik kontrolleri sürekli |
 | FR-010–FR-021 | 10–16 | Öğrenci işlemleri, detay ve notlar |
-| FR-022–FR-030 | 14–17 | Ders türleri, öğrenci ücretleri, ders ücreti snapshot |
+| FR-022–FR-030 | 7, 9, 14–17 | Ders türleri, varsayılan ders, öğrenci çoklu ders/ücret (`StudentSubjects`), tek ders türlü oturum (`Lessons`) ve ücret snapshot |
 | FR-031–FR-047 | 17–23 | Manuel haftalık takvim, çakışma ve tekrarlama |
 | FR-048–FR-056 | 32–34, 44 | Öğretmen/öğrenci müsaitliği, mola ve ayarlar |
 | FR-057–FR-068 | 24–26, 31 | Yoklama, ücret seçimi, düzeltme |

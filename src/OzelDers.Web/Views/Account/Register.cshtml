@@ -4,7 +4,7 @@
 }
 
 <div class="row justify-content-center py-3">
-    <div class="col-12 col-md-8 col-lg-6 col-xl-5">
+    <div class="col-12 col-md-9 col-lg-7 col-xl-6">
         <div class="odys-card p-4">
             <div class="mb-4">
                 <span class="odys-status-pill odys-status-active mb-2">Öğretmen Hesabı</span>
@@ -32,26 +32,67 @@
                         <span asp-validation-for="LastName" class="text-danger small"></span>
                     </div>
 
-                    <div class="col-12">
+                    <div class="col-12 col-sm-6">
                         <label asp-for="Email" class="form-label fw-semibold"></label>
                         <input asp-for="Email" class="form-control" autocomplete="email" placeholder="ornek@eposta.com" />
                         <span asp-validation-for="Email" class="text-danger small"></span>
                     </div>
 
-                    <div class="col-12">
+                    <div class="col-12 col-sm-6">
                         <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
                         <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" placeholder="05xx xxx xx xx" />
                         <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                     </div>
 
+                    <!-- Zorunlu Ders Türü Seçimi ve Tanımlama Alanı -->
                     <div class="col-12">
+                        <div class="p-3 rounded-3 border bg-light-subtle">
+                            <label class="form-label fw-semibold mb-1">Verdiğiniz Ders Türleri (En Az Bir Ders Zorunlu)</label>
+                            <p class="small text-muted mb-2">
+                                İlk seçtiğiniz veya yazdığınız ders türü otomatik olarak <strong>varsayılan dersiniz</strong> olur. Sonradan yeni ders türleri ekleyebilir veya varsayılan dersinizi değiştirebilirsiniz.
+                            </p>
+
+                            <div class="row g-2 mb-3">
+                                @foreach (var subjectName in RegisterViewModel.SuggestedSubjectNames)
+                                {
+                                    var isChecked = Model.SelectedSubjects != null &&
+                                                    Model.SelectedSubjects.Contains(subjectName, StringComparer.OrdinalIgnoreCase);
+                                    var checkboxId = $"subj_{subjectName}";
+                                    <div class="col-6 col-sm-4 col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   name="SelectedSubjects"
+                                                   value="@subjectName"
+                                                   id="@checkboxId"
+                                                   checked="@isChecked" />
+                                            <label class="form-check-label small" for="@checkboxId">
+                                                @subjectName
+                                            </label>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <span asp-validation-for="SelectedSubjects" class="text-danger small d-block mb-2"></span>
+
+                            <div>
+                                <label asp-for="CustomSubjects" class="form-label small fw-semibold mb-1"></label>
+                                <input asp-for="CustomSubjects"
+                                       class="form-control form-control-sm"
+                                       placeholder="Örn. LGS Matematik, AP Calculus, İspanyolca (virgülle ayırın)" />
+                                <span asp-validation-for="CustomSubjects" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
                         <label asp-for="Password" class="form-label fw-semibold"></label>
                         <input asp-for="Password" class="form-control" autocomplete="new-password" />
-                        <div class="form-text small">En az 8 karakter; büyük harf, küçük harf ve rakam içermelidir.</div>
+                        <div class="form-text small">En az 8 karakter; büyük/küçük harf ve rakam.</div>
                         <span asp-validation-for="Password" class="text-danger small"></span>
                     </div>
 
-                    <div class="col-12">
+                    <div class="col-12 col-sm-6">
                         <label asp-for="ConfirmPassword" class="form-label fw-semibold"></label>
                         <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
                         <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>

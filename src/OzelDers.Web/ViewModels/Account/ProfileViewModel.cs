@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace OzelDers.Web.ViewModels.Account;
 
 /// <summary>
-/// Öğretmen profil düzenleme ViewModel sınıfı (FR-006, DEC-10, NFR-009).
+/// Öğretmen profil düzenleme ve varsayılan ders görüntüleme ViewModel sınıfı (FR-006, FR-022, DEC-10, NFR-009).
 /// </summary>
 public class ProfileViewModel
 {
@@ -36,4 +36,16 @@ public class ProfileViewModel
 
     [Display(Name = "Para Birimi")]
     public string CurrencyCode { get; set; } = "TRY";
+
+    [Display(Name = "Varsayılan Ders Türü")]
+    public string? DefaultSubjectName { get; set; }
+
+    [Display(Name = "Tanımlı Aktif Ders Türleri")]
+    public IReadOnlyList<string> ActiveSubjectNames { get; set; } = Array.Empty<string>();
+
+    public bool HasAnyActiveSubject => !string.IsNullOrWhiteSpace(DefaultSubjectName) || ActiveSubjectNames.Count > 0;
+
+    [StringLength(100, ErrorMessage = "Ders türü adı en fazla 100 karakter olabilir.")]
+    [Display(Name = "İlk (Varsayılan) Ders Türünüzü Tanımlayın")]
+    public string? InitialSubjectName { get; set; }
 }

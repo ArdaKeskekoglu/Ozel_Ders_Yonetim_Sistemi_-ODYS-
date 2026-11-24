@@ -10,12 +10,12 @@ Bu dosya görüşmelerde bir araya getirilen **143 maddelik işlev listesi**dir.
 
 | ID | Gereksinim |
 |---|---|
-| FR-001 | Öğretmen sisteme kayıt olabilmeli. |
+| FR-001 | Öğretmen sisteme kayıt olabilmeli; kayıt sırasında en az bir ders türü seçmek veya tanımlamak zorunlu olmalı ve ilk ders otomatik olarak varsayılan ders (`IsDefault`) atanmalı. |
 | FR-002 | E-posta ve şifresiyle giriş yapabilmeli. |
 | FR-003 | Hesabından güvenli şekilde çıkış yapabilmeli. |
 | FR-004 | Şifresini değiştirebilmeli. |
 | FR-005 | Şifresini unuttuğunda sıfırlayabilmeli. |
-| FR-006 | Ad, soyad ve iletişim bilgilerini düzenleyebilmeli. |
+| FR-006 | Ad, soyad ve iletişim bilgilerini düzenleyebilmeli; profilinde varsayılan ders türünü görüntüleyebilmeli. |
 | FR-007 | Her öğretmen yalnızca kendi öğrencilerini görebilmeli. |
 | FR-008 | Her öğretmen yalnızca kendi derslerini ve finansal kayıtlarını yönetebilmeli. |
 | FR-009 | İlk sürümde öğrenciler için kullanıcı hesabı bulunmamalı. |
@@ -41,15 +41,15 @@ Bu dosya görüşmelerde bir araya getirilen **143 maddelik işlev listesi**dir.
 
 | ID | Gereksinim |
 |---|---|
-| FR-022 | Öğretmen birden fazla ders türü tanımlayabilmeli. |
+| FR-022 | Öğretmen birden fazla ders türü tanımlayabilmeli ve aktif ders türlerinden birini varsayılan ders olarak belirleyebilmeli (tek aktif ders varsa otomatik varsayılan olmalı). |
 | FR-023 | Matematik, fizik, geometri gibi ders türlerini düzenleyebilmeli. |
-| FR-024 | Kullanılmayan ders türlerini kaldırabilmeli veya arşivleyebilmeli. |
-| FR-025 | Bir öğrenciye birden fazla ders türü atanabilmeli. |
-| FR-026 | Öğrenciye ve ders türüne özel saatlik ücret belirlenebilmeli. |
+| FR-024 | Kullanılmayan ders türlerini kaldırabilmeli veya geçmiş bağlantıları bozmadan arşivleyebilmeli; varsayılan ders arşivlendiğinde kalan aktif derslerden biri varsayılan olmalı. |
+| FR-025 | Bir öğrenciye öğretmenin tanımladığı ders türlerinden birden fazla ders türü (`StudentSubjects`) atanabilmeli; atama ekranında öğretmenin varsayılan dersi otomatik seçili gelmeli. |
+| FR-026 | Öğrenciye ve ders türüne özel saatlik ücret (`HourlyRate`) belirlenebilmeli. |
 | FR-027 | Saatlik ders ücreti sonradan değiştirilebilmeli. |
-| FR-028 | Öğrencinin haftalık kaç ders alması gerektiği belirlenebilmeli. |
-| FR-029 | Farklı ders türleri için farklı ders süreleri belirlenebilmeli. |
-| FR-030 | Sonradan yapılan ücret değişiklikleri geçmiş derslerin ücretlerini etkilememeli. |
+| FR-028 | Öğrencinin her bir ders türü için haftalık kaç ayrı ders oturumu (`WeeklyTargetCount`) alması gerektiği belirlenebilmeli. |
+| FR-029 | Farklı öğrenci–ders türü ilişkileri için her bir ders oturumunun süresi (`DefaultDurationMinutes`) ayrı belirlenebilmeli (örn. haftada 2 oturum × 60 dk ile 1 oturum × 120 dk ayrımı korunmalı). |
+| FR-030 | Sonradan yapılan ücret veya varsayılan ders değişiklikleri geçmiş derslerin ders türünü veya ücretlerini etkilememeli. |
 
 ## Haftalık ders programı
 
@@ -59,9 +59,9 @@ Bu dosya görüşmelerde bir araya getirilen **143 maddelik işlev listesi**dir.
 | FR-032 | Önceki haftaya geçebilmeli. |
 | FR-033 | Sonraki haftaya geçebilmeli. |
 | FR-034 | Belirli bir haftaya doğrudan gidebilmeli. |
-| FR-035 | Takvim üzerinden manuel ders ekleyebilmeli. |
+| FR-035 | Takvim üzerinden manuel ders oturumu ekleyebilmeli; her ders oturumu yalnızca tek bir ders türüne (`StudentSubjectId`) ait olmalı. |
 | FR-036 | Dersin öğrencisini seçebilmeli. |
-| FR-037 | Ders türünü seçebilmeli. |
+| FR-037 | Öğrenciye atanmış ders türlerinden tek bir ders türünü seçebilmeli (bir ders oturumuna birden fazla ders türü atanamamalı). |
 | FR-038 | Ders tarihi, başlangıç saati ve süresini belirleyebilmeli. |
 | FR-039 | Mevcut dersin bilgilerini güncelleyebilmeli. |
 | FR-040 | Dersi başka bir gün veya saate taşıyabilmeli. |
@@ -130,8 +130,8 @@ Bu dosya görüşmelerde bir araya getirilen **143 maddelik işlev listesi**dir.
 | FR-083 | Öğretmen otomatik program oluşturma ekranını açabilmeli. |
 | FR-084 | Programın oluşturulacağı haftayı seçebilmeli. |
 | FR-085 | Algoritma yalnızca seçilen bir hafta için çalışmalı. |
-| FR-086 | Programa dahil edilecek öğrenciler seçilebilmeli. |
-| FR-087 | Öğrencilerin haftalık ders ihtiyaçları dikkate alınmalı. |
+| FR-086 | Programa dahil edilecek öğrenciler ve öğrenci–ders türü (`StudentSubject`) hedefleri seçilebilmeli. |
+| FR-087 | Öğrencilerin her bir ders türü için haftalık ders oturumu adedi (`WeeklyTargetCount`) ve oturum süresi (`DefaultDurationMinutes`) ayrı ayrı dikkate alınmalı; üretilen her ders oturumu yalnızca tek bir ders türüne ait olmalı. |
 | FR-088 | Öğrencilerin müsaitlik saatleri dikkate alınmalı. |
 | FR-089 | Öğretmenin çalışma saatleri dikkate alınmalı. |
 | FR-090 | Ders süreleri ve mola kuralları dikkate alınmalı. |

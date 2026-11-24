@@ -21,9 +21,9 @@ Her faz için: (1) amaç ve gereksinim ID’leri, (2) dar kapsamlı uygulama, (3
 | Faz | İş | Tamamlanma kanıtı |
 |---|---|---|
 | **6 — Öğretmen hesabı ve Identity** | Identity altyapısı, hesap modeli | Kimlik tabloları oluşur, şifreler güvenli saklanır |
-| **7 — Kayıt olma** | Kayıt formu, doğrulama ve güvenli hata mesajı | Yeni öğretmen kaydedilir |
+| **7 — Kayıt olma** | Kayıt formu, zorunlu ders türü seçimi/tanımı, ilk dersin varsayılan atanması, doğrulama | Ders seçmeden kayıt yapılamaz; yeni öğretmen ve varsayılan dersi atomik kaydedilir |
 | **8 — Giriş, çıkış ve yetkilendirme** | Login/logout, authorize, sahiplik filtresi | Diğer öğretmenin verisine erişim reddedilir |
-| **9 — Profil ve hesap bakımı** | Profil düzenleme, şifre değiştirme/sıfırlama akışları | Yetkili kullanıcı günceller; güvenli sıfırlama sınanır |
+| **9 — Profil ve hesap bakımı** | Profil düzenleme, varsayılan ders görüntüleme (eski hesaplar için ilk ders tamamlama), şifre değiştirme/sıfırlama | Yetkili kullanıcı günceller; varsayılan ders görünür ve güvenli sıfırlama sınanır |
 
 ## Öğrenci ve ders türü — Faz 10–16
 
@@ -33,15 +33,15 @@ Her faz için: (1) amaç ve gereksinim ID’leri, (2) dar kapsamlı uygulama, (3
 | **11 — Öğrenci listesi** | Listeleme ve boş durum görünümü | Yalnızca kendi öğrencileri görünür |
 | **12 — Öğrenci ekleme** | Form, doğrulama, kayıt | Yeni öğrenci doğru verilerle kaydolur |
 | **13 — Öğrenci güncelleme/arşiv** | Düzenleme, arşiv, yeniden aktif etme | Geçmiş bağlantılar bozulmaz |
-| **14 — Ders türü yönetimi** | Ders türlerini ekle, düzenle, arşivle | Ders türleri öğretmene özeldir |
-| **15 — Öğrenci-ders türü ve ücret** | Çoklu ders türü, ders başına ücret, haftalık hedef | Öğrenciye farklı ücretler atanır |
+| **14 — Ders türü yönetimi** | Ders türlerini listele, ekle, düzenle, varsayılan dersi değiştir, güvenli arşivle/yeniden etkinleştir | Ders türleri öğretmene özeldir; en az 1 aktif derste 1 varsayılan ders korunur |
+| **15 — Öğrenci-ders türü ve ücret** | Varsayılan ders otomatik seçili atama, çoklu ders türü (`StudentSubjects`), saatlik ücret (`HourlyRate`), oturum süresi (`DefaultDurationMinutes`) ve haftalık oturum adedi (`WeeklyTargetCount`) | Öğrenciye birden fazla ders türü farklı ücret ve haftalık hedeflerle atanır |
 | **16 — Öğrenci detayları** | Detay, notlar, filtre/arama | İlişkili bilgiler doğru gösterilir |
 
 ## Manuel program — Faz 17–23
 
 | Faz | İş | Tamamlanma kanıtı |
 |---|---|---|
-| **17 — Ders kayıt modeli** | Lesson, ücret snapshot, durumlar | Ders-öğrenci-tür bağı kurulur |
+| **17 — Ders kayıt modeli** | `Lesson` (`StudentSubjectId` üzerinden tek öğrenci–ders türü bağı), ücret snapshot, durumlar | Her ders oturumu yalnızca tek bir ders türüne ve öğrenciye bağlanır |
 | **18 — Haftalık takvim** | Hafta navigasyonu ve takvim verileri | Önceki/sonraki hafta doğru |
 | **19 — Manuel ders ekleme** | Takvimden yeni ders kaydı | Tarih/saat/öğrenci/tür doğrulanır |
 | **20 — Ders düzenleme** | Gün ve saat değişikliği, alan güncelleme | Değişiklik doğru ders üzerinde gerçekleşir |

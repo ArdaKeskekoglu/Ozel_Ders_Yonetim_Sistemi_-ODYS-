@@ -38,11 +38,12 @@ public class TeacherRegistrationTests
     }
 
     [Fact]
-    public async Task RegisterTeacherAsync_WithValidInput_CreatesTeacherWithNormalizedFields()
+    public async Task RegisterTeacherAsync_WithSingleSubject_CreatesTeacherAndSetsSingleSubjectAsDefault()
     {
-        using var provider = CreateServiceProvider(nameof(RegisterTeacherAsync_WithValidInput_CreatesTeacherWithNormalizedFields));
+        using var provider = CreateServiceProvider(nameof(RegisterTeacherAsync_WithSingleSubject_CreatesTeacherAndSetsSingleSubjectAsDefault));
         var service = provider.GetRequiredService<ITeacherAccountService>();
         var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
+        var dbContext = provider.GetRequiredService<ApplicationDbContext>();
 
         var model = new RegisterViewModel
         {
@@ -50,6 +51,7 @@ public class TeacherRegistrationTests
             LastName = " Karaca  ",
             Email = "  elif.karaca@odys.local ",
             PhoneNumber = " 0555 000 00 00 ",
+            SelectedSubjects = new List<string> { "Matematik" },
             Password = "GuvenliSifre123",
             ConfirmPassword = "GuvenliSifre123"
         };
@@ -66,6 +68,77 @@ public class TeacherRegistrationTests
 
         var persisted = await userManager.FindByEmailAsync("elif.karaca@odys.local");
         Assert.NotNull(persisted);
+
+        var subjects = await dbContext.Subjects.Where(s => s.TeacherId == persisted.Id).ToListAsync();
+        var singleSubject = Assert.Single(subjects);
+        Assert.Equal("Matematik", singleSubject.Name);
+        Assert.True(singleSubject.IsDefault);
+        Assert.False(singleSubject.IsArchived);
+    }
+
+    [Fact]
+    public async Task RegisterTeacherAsync_WithMultipleSubjects_SetsFirstSelectedSubjectAsDefaultAndDeduplicates()
+    {
+        using var provider = CreateServiceProvider(nameof(RegisterTeacherAsync_WithMultipleSubjects_SetsFirstSelectedSubjectAsDefaultAndDeduplicates));
+        var service = provider.GetRequiredService<ITeacherAccountService>();
+        var dbContext = provider.GetRequiredService<ApplicationDbContext>();
+
+        var model = new RegisterViewModel
+        {
+            FirstName = "Ahmet",
+            LastName = "Sönmez",
+            Email = "ahmet.sonmez@odys.local",
+            SelectedSubjects = new List<string> { "Geometri", "Matematik" },
+            CustomSubjects = " Fizik , geometri , LGS Matematik ",
+            Password = "GuvenliSifre123",
+            ConfirmPassword = "GuvenliSifre123"
+        };
+
+        var result = await service.RegisterTeacherAsync(model);
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.User);
+
+        var teacherSubjects = await dbContext.Subjects
+            .Where(s => s.TeacherId == result.User.Id)
+            .OrderBy(s => s.Id)
+            .ToListAsync();
+
+        Assert.Equal(4, teacherSubjects.Count);
+        Assert.Equal(new[] { "Geometri", "Matematik", "Fizik", "LGS Matematik" }, teacherSubjects.Select(s => s.Name).ToArray());
+
+        var defaultSubject = Assert.Single(teacherSubjects, s => s.IsDefault);
+        Assert.Equal("Geometri", defaultSubject.Name);
+    }
+
+    [Fact]
+    public async Task RegisterTeacherAsync_WithoutAnySubject_IsRejectedAndLeavesNoPartialUserRecord()
+    {
+        using var provider = CreateServiceProvider(nameof(RegisterTeacherAsync_WithoutAnySubject_IsRejectedAndLeavesNoPartialUserRecord));
+        var service = provider.GetRequiredService<ITeacherAccountService>();
+        var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
+        var dbContext = provider.GetRequiredService<ApplicationDbContext>();
+
+        var model = new RegisterViewModel
+        {
+            FirstName = "Zeynep",
+            LastName = "Erdoğan",
+            Email = "zeynep.erdogan@odys.local",
+            SelectedSubjects = new List<string>(),
+            CustomSubjects = "   ",
+            Password = "GuvenliSifre123",
+            ConfirmPassword = "GuvenliSifre123"
+        };
+
+        var result = await service.RegisterTeacherAsync(model);
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.User);
+        Assert.Contains("Kayıt olabilmek için en az bir ders türü seçmeli veya tanımlamalısınız.", result.Errors);
+
+        var userInDb = await userManager.FindByEmailAsync("zeynep.erdogan@odys.local");
+        Assert.Null(userInDb);
+        Assert.Equal(0, await dbContext.Subjects.CountAsync());
     }
 
     [Fact]
@@ -79,6 +152,7 @@ public class TeacherRegistrationTests
             FirstName = "Burak",
             LastName = "Şahin",
             Email = "burak@odys.local",
+            SelectedSubjects = new List<string> { "Fizik" },
             Password = "GuvenliSifre123",
             ConfirmPassword = "GuvenliSifre123"
         };
@@ -94,16 +168,18 @@ public class TeacherRegistrationTests
     }
 
     [Fact]
-    public async Task RegisterTeacherAsync_WithWeakPassword_ReturnsTurkishPasswordPolicyErrors()
+    public async Task RegisterTeacherAsync_WithWeakPassword_ReturnsTurkishPasswordPolicyErrorsAndLeavesNoSubjects()
     {
-        using var provider = CreateServiceProvider(nameof(RegisterTeacherAsync_WithWeakPassword_ReturnsTurkishPasswordPolicyErrors));
+        using var provider = CreateServiceProvider(nameof(RegisterTeacherAsync_WithWeakPassword_ReturnsTurkishPasswordPolicyErrorsAndLeavesNoSubjects));
         var service = provider.GetRequiredService<ITeacherAccountService>();
+        var dbContext = provider.GetRequiredService<ApplicationDbContext>();
 
         var model = new RegisterViewModel
         {
             FirstName = "Can",
             LastName = "Yıldız",
             Email = "can@odys.local",
+            SelectedSubjects = new List<string> { "Kimya" },
             Password = "kisa",
             ConfirmPassword = "kisa"
         };
@@ -114,6 +190,7 @@ public class TeacherRegistrationTests
         Assert.Contains("Şifre en az 8 karakter uzunluğunda olmalıdır.", result.Errors);
         Assert.Contains("Şifre en az bir rakam (0-9) içermelidir.", result.Errors);
         Assert.Contains("Şifre en az bir büyük harf (A-Z) içermelidir.", result.Errors);
+        Assert.Equal(0, await dbContext.Subjects.CountAsync());
     }
 
     [Fact]
@@ -124,6 +201,7 @@ public class TeacherRegistrationTests
             FirstName = "A",
             LastName = "Yılmaz",
             Email = "gecersiz-eposta",
+            SelectedSubjects = new List<string> { "Matematik" },
             Password = "GuvenliSifre123",
             ConfirmPassword = "FarkliSifre123"
         };
@@ -135,5 +213,26 @@ public class TeacherRegistrationTests
         Assert.Contains(validationResults, r => r.MemberNames.Contains(nameof(RegisterViewModel.FirstName)));
         Assert.Contains(validationResults, r => r.MemberNames.Contains(nameof(RegisterViewModel.Email)));
         Assert.Contains(validationResults, r => r.MemberNames.Contains(nameof(RegisterViewModel.ConfirmPassword)));
+    }
+
+    [Fact]
+    public void RegisterViewModel_Validation_FailsWhenNoSubjectIsSelectedOrEntered()
+    {
+        var model = new RegisterViewModel
+        {
+            FirstName = "Ayşe",
+            LastName = "Yılmaz",
+            Email = "ayse@odys.local",
+            SelectedSubjects = new List<string>(),
+            CustomSubjects = "   ",
+            Password = "GuvenliSifre123",
+            ConfirmPassword = "GuvenliSifre123"
+        };
+
+        var validationResults = new List<ValidationResult>();
+        var isValid = Validator.TryValidateObject(model, new ValidationContext(model), validationResults, validateAllProperties: true);
+
+        Assert.False(isValid);
+        Assert.Contains(validationResults, r => r.MemberNames.Contains(nameof(RegisterViewModel.SelectedSubjects)));
     }
 }

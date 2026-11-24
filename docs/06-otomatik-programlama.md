@@ -10,7 +10,9 @@ Seçilen **tek hafta** için öğrenci hedef derslerini, öğretmen/öğrenci m�
 
 - `TeacherId` (oturumdan), `WeekStart` (pazartesi), saat dilimi
 - Öğretmenin izin verdiği tarih/saat aralıkları, istisnaları, minimum mola, günlük maksimum süre
-- Seçili aktif `StudentSubject`: öğrenci, tür, istenen ders adedi, ders süresi, ücret
+- Seçili aktif `StudentSubject` kayıtları: öğrenci, ders türü (`Subject`), haftalık ayrı ders oturumu adedi (`WeeklyTargetCount`), her bir oturumun süresi (`DefaultDurationMinutes`) ve saatlik ücret (`HourlyRate`).
+  - **Önemli kural:** Algoritma bir öğrencinin farklı ders türlerini (örn. Ahmet -> Matematik: haftada 2 oturum × 60 dk; Ahmet -> Geometri: haftada 1 oturum × 60 dk) ayrı ders ihtiyaçları olarak ele alır ve toplam 3 ayrı ders oturumu görevi üretir. Haftada 2 oturum × 60 dakika ile 1 oturum × 120 dakika arasındaki fark korunur.
+  - Oluşturulan her ders oturumu (`Lesson`) yalnızca **tek bir ders türüne (`StudentSubjectId`)** bağlıdır; tek bir ders oturumuna birden fazla ders türü atanamaz.
 - Her öğrencinin düzenli ve haftaya özel müsaitlikleri
 - O haftanın mevcut dersleri; her biri `Fixed` veya `Movable`
 - Opsiyonel tercih ağırlıkları: boşlukları azalt, belirli günleri daha az doldur, erken/geç saat tercihleri

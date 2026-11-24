@@ -27,7 +27,8 @@
 | Planlama ufku | Otomatik programlama **tek bir hafta** (pazartesi–pazar). |
 | Mevcut dersler | Öğretmen planlama öncesinde **sabit** ve **değiştirilebilir** dersleri seçer. |
 | Hesaplar | İlk aşamada **yalnızca öğretmen girişi**. |
-| Ders türü | Öğretmen birden çok ders türü ekleyebilir; öğrenciler birden çok ders türü alabilir. |
+| Ders türü ve varsayılan ders | Öğretmen kayıt olurken en az bir ders türü tanımlar; ilk seçtiği ders otomatik olarak **varsayılan ders** olur. Öğretmen sonradan yeni ders türleri ekleyebilir ve varsayılan dersi değiştirebilir. |
+| Öğrenci dersleri ve oturumlar | Bir öğrenciye farklı ücret ve haftalık hedeflerle **birden çok ders türü (`StudentSubjects`)** atanabilir (varsayılan ders otomatik seçili gelir); ancak **her ders oturumu (`Lessons`) yalnızca tek bir ders türüne** ait olabilir. |
 | Ödeme | Öğretmen dersten sonra **alındı / alınmadı / kısmen alındı** bilgisini işleyebilir; sonradan ödeme eklenebilir. |
 | Onay | Taslak onaylanmadan gerçek dersler değişmez. |
 

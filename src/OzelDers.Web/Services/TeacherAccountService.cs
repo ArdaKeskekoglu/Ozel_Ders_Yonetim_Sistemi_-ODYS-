@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using OzelDers.Web.Data;
 using OzelDers.Web.Domain.Entities;
 using OzelDers.Web.Services.Abstractions;
 using OzelDers.Web.ViewModels.Account;
@@ -6,8 +8,9 @@ using OzelDers.Web.ViewModels.Account;
 namespace OzelDers.Web.Services;
 
 /// <summary>
-/// Öğretmen kayıt, giriş doğrulama, profil düzenleme, şifre değiştirme ve
-/// güvenli token ile şifre sıfırlama işlemlerini yürüten servis (FR-001..FR-006, NFR-005, NFR-009, NFR-010).
+/// Öğretmen kayıt, giriş doğrulama, profil düzenleme, varsayılan ders bütünlüğü,
+/// şifre değiştirme ve güvenli token ile şifre sıfırlama işlemlerini yürüten servis
+/// (FR-001..FR-006, FR-022, BR-16, NFR-005, NFR-008, NFR-009, NFR-010).
 /// </summary>
 public class TeacherAccountService : ITeacherAccountService
 {
@@ -15,10 +18,14 @@ public class TeacherAccountService : ITeacherAccountService
     private const string LockedOutMessage = "Çok fazla başarısız giriş denemesi nedeniyle hesabınız geçici olarak kilitlendi. Lütfen daha sonra tekrar deneyiniz.";
 
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ApplicationDbContext _dbContext;
 
-    public TeacherAccountService(UserManager<ApplicationUser> userManager)
+    public TeacherAccountService(
+        UserManager<ApplicationUser> userManager,
+        ApplicationDbContext dbContext)
     {
         _userManager = userManager;
+        _dbContext = dbContext;
     }
 
     public async Task<TeacherRegistrationResult> RegisterTeacherAsync(
@@ -48,6 +55,23 @@ public class TeacherAccountService : ITeacherAccountService
                 new[] { "Şifre ile şifre tekrarı birbiriyle eşleşmiyor." });
         }
 
+        var subjectNames = model.GetNormalizedSubjectNames();
+        if (subjectNames.Count == 0)
+        {
+            return new TeacherRegistrationResult(
+                false,
+                null,
+                new[] { "Kayıt olabilmek için en az bir ders türü seçmeli veya tanımlamalısınız." });
+        }
+
+        if (subjectNames.Any(s => s.Length < 2 || s.Length > 100))
+        {
+            return new TeacherRegistrationResult(
+                false,
+                null,
+                new[] { "Her bir ders türü adı en az 2, en fazla 100 karakter olmalıdır." });
+        }
+
         var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
         if (existingUser is not null)
         {
@@ -70,18 +94,70 @@ public class TeacherAccountService : ITeacherAccountService
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        var identityResult = await _userManager.CreateAsync(teacher, model.Password);
-        if (!identityResult.Succeeded)
+        var isRelational = _dbContext.Database.IsRelational();
+        await using var transaction = isRelational
+            ? await _dbContext.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+
+        try
         {
-            var friendlyErrors = identityResult.Errors
-                .Select(MapIdentityErrorToTurkish)
-                .Distinct()
+            var identityResult = await _userManager.CreateAsync(teacher, model.Password);
+            if (!identityResult.Succeeded)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                }
+
+                var friendlyErrors = identityResult.Errors
+                    .Select(MapIdentityErrorToTurkish)
+                    .Distinct()
+                    .ToList();
+
+                return new TeacherRegistrationResult(false, null, friendlyErrors);
+            }
+
+            var subjects = subjectNames
+                .Select((name, index) => new Subject
+                {
+                    TeacherId = teacher.Id,
+                    Name = name,
+                    IsDefault = index == 0,
+                    IsArchived = false
+                })
                 .ToList();
 
-            return new TeacherRegistrationResult(false, null, friendlyErrors);
-        }
+            _dbContext.Subjects.AddRange(subjects);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new TeacherRegistrationResult(true, teacher, Array.Empty<string>());
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            return new TeacherRegistrationResult(true, teacher, Array.Empty<string>());
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+            else
+            {
+                // InMemory test ortamında transaction desteklenmediğinde kısmi kullanıcı kaydını temizle
+                var created = await _userManager.FindByIdAsync(teacher.Id);
+                if (created is not null)
+                {
+                    await _userManager.DeleteAsync(created);
+                }
+            }
+
+            return new TeacherRegistrationResult(
+                false,
+                null,
+                new[] { "Kayıt işlemi sırasında beklenmeyen bir hata oluştu. Lütfen tekrar deneyiniz." });
+        }
     }
 
     public async Task<TeacherLoginValidationResult> ValidateTeacherCredentialsAsync(
@@ -138,6 +214,18 @@ public class TeacherAccountService : ITeacherAccountService
             return null;
         }
 
+        await EnsureDefaultSubjectInvariantAsync(teacherId, cancellationToken);
+
+        var activeSubjects = await _dbContext.Subjects
+            .AsNoTracking()
+            .Where(s => s.TeacherId == teacherId && !s.IsArchived)
+            .OrderByDescending(s => s.IsDefault)
+            .ThenBy(s => s.Name)
+            .ToListAsync(cancellationToken);
+
+        var defaultSubject = activeSubjects.FirstOrDefault(s => s.IsDefault)
+            ?? activeSubjects.FirstOrDefault();
+
         return new ProfileViewModel
         {
             FirstName = user.FirstName,
@@ -146,7 +234,9 @@ public class TeacherAccountService : ITeacherAccountService
             Email = user.Email ?? string.Empty,
             PhoneNumber = user.PhoneNumber,
             TimeZoneId = user.TimeZoneId,
-            CurrencyCode = user.CurrencyCode
+            CurrencyCode = user.CurrencyCode,
+            DefaultSubjectName = defaultSubject?.Name,
+            ActiveSubjectNames = activeSubjects.Select(s => s.Name).ToList()
         };
     }
 
@@ -174,6 +264,48 @@ public class TeacherAccountService : ITeacherAccountService
         {
             return new TeacherAccountOperationResult(false, new[] { "Ad ve soyad alanları boş bırakılamaz." });
         }
+
+        if (!string.IsNullOrWhiteSpace(model.InitialSubjectName))
+        {
+            var initialSubject = model.InitialSubjectName.Trim();
+            if (initialSubject.Length < 2 || initialSubject.Length > 100)
+            {
+                return new TeacherAccountOperationResult(
+                    false,
+                    new[] { "Ders türü adı en az 2, en fazla 100 karakter olmalıdır." });
+            }
+
+            var hasAnyActiveSubject = await _dbContext.Subjects
+                .AnyAsync(s => s.TeacherId == teacherId && !s.IsArchived, cancellationToken);
+
+            if (!hasAnyActiveSubject)
+            {
+                var existingArchived = await _dbContext.Subjects
+                    .FirstOrDefaultAsync(
+                        s => s.TeacherId == teacherId && s.Name.ToLower() == initialSubject.ToLower(),
+                        cancellationToken);
+
+                if (existingArchived is not null)
+                {
+                    existingArchived.IsArchived = false;
+                    existingArchived.IsDefault = true;
+                }
+                else
+                {
+                    _dbContext.Subjects.Add(new Subject
+                    {
+                        TeacherId = teacherId,
+                        Name = initialSubject,
+                        IsDefault = true,
+                        IsArchived = false
+                    });
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        await EnsureDefaultSubjectInvariantAsync(teacherId, cancellationToken);
 
         user.FirstName = firstName;
         user.LastName = lastName;
@@ -272,7 +404,6 @@ public class TeacherAccountService : ITeacherAccountService
         var user = await _userManager.FindByEmailAsync(model.Email.Trim());
         if (user is null)
         {
-            // Kullanıcı numaralandırma (enumeration) koruması için aynı güvenli mesajı döndür
             return new TeacherAccountOperationResult(false, new[] { "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş." });
         }
 
@@ -287,6 +418,46 @@ public class TeacherAccountService : ITeacherAccountService
         }
 
         return new TeacherAccountOperationResult(true, Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// Öğretmenin en az bir aktif dersi varken mutlaka tam olarak bir aktif varsayılan dersi
+    /// bulunmasını garanti altına alır (BR-16).
+    /// </summary>
+    private async Task EnsureDefaultSubjectInvariantAsync(
+        string teacherId,
+        CancellationToken cancellationToken)
+    {
+        var activeSubjects = await _dbContext.Subjects
+            .Where(s => s.TeacherId == teacherId && !s.IsArchived)
+            .OrderBy(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        if (activeSubjects.Count == 0)
+        {
+            return;
+        }
+
+        var defaultSubjects = activeSubjects.Where(s => s.IsDefault).ToList();
+        if (defaultSubjects.Count == 1)
+        {
+            return;
+        }
+
+        if (defaultSubjects.Count == 0)
+        {
+            activeSubjects[0].IsDefault = true;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        // Birden fazla varsayılan işaretlenmişse yalnızca ilkini koru
+        for (var i = 1; i < defaultSubjects.Count; i++)
+        {
+            defaultSubjects[i].IsDefault = false;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static string MapIdentityErrorToTurkish(IdentityError error) =>

@@ -30,9 +30,12 @@ Gerçek route adları geliştirmede değişebilir.
 
 Liste sütunları: ad-soyad, ders türleri, aktiflik, bir sonraki ders, toplam açık bakiye. Arama ve filtre. Detay sekmeleri: Genel Bilgiler, Dersler, Ödemeler, Müsaitlik, Notlar. Öğrenciyi arşivleme geri alınabilir olmalı.
 
-## Ekran 3 — Ders türleri
+## Ekran 3 — Ders türleri ve kayıt/profil bağlantısı
 
-Öğretmenin kendi ders türlerini eklediği/düzenlediği liste. Öğrenci detayında ilgili ders türü için saatlik ücret, varsayılan süre ve haftalık hedef adet ayarlanabilir. Eski kayıt kullanan tür arşivlenebilir.
+- **Kayıt ekranı (`/Account/Register`):** Öğretmen kayıt olurken en az bir ders türü seçmek veya tanımlamak zorundadır. İlk seçilen/tanımlanan ders otomatik olarak öğretmenin **varsayılan dersi** olur.
+- **Profil ekranı (`/Account/Profile`):** Öğretmenin mevcut varsayılan dersi görüntülenir. Henüz dersi olmayan eski hesaplar için tamamlayıcı ilk ders türü tanımlama alanı sunulur.
+- **Ders türleri yönetim ekranı (`/Subjects`):** Öğretmenin kendi ders türlerini eklediği, düzenlediği, varsayılan dersini değiştirdiği ve eski kayıt kullanan türleri güvenli biçimde arşivlediği liste. Tek aktif ders varsa otomatik varsayılan kalır.
+- **Öğrenciye ders atama:** Öğrenci detayında ders atanırken öğretmenin varsayılan dersi otomatik seçili gelir; öğretmen isterse başka ders türünü seçebilir. Bir öğrenciye birden fazla ders türü atanabilir ve her öğrenci–ders türü ilişkisi için saatlik ücret (`HourlyRate`), oturum süresi (`DefaultDurationMinutes`) ve haftalık ders oturumu adedi (`WeeklyTargetCount`) ayrı ayarlanır.
 
 ## Ekran 4 — Haftalık takvim
 
@@ -40,7 +43,7 @@ Hafta seçici (önceki/bu/sonraki), günlük saat ızgarası, ders kartları, h�
 
 ### Manuel ders ekleme formu
 
-Öğrenci, ders türü, tarih, başlangıç, süre/bitiş, ücret önizlemesi, not. Kaydederken öğrencinin aktifliği, tür ilişkisi, çalışma saatleri (öğretmen izin verecekse), çakışma ve geçerlilik doğrulanır.
+Öğrenci, öğrenciye atanmış **tek bir ders türü (`StudentSubjectId`)**, tarih, başlangıç, süre/bitiş, ücret önizlemesi, not. **Her ders oturumu yalnızca tek bir ders türüne ait olabilir.** Kaydederken öğrencinin aktifliği, öğrenci–ders türü ilişkisi, çalışma saatleri (öğretmen izin verecekse), çakışma ve geçerlilik doğrulanır.
 
 ## Ekran 5 — Ders tamamlama
 

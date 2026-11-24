@@ -11,7 +11,7 @@
                     <span class="odys-status-pill odys-status-active mb-2">Hesap ve Tercihler</span>
                     <h1 class="h4 fw-bold mb-1">Profil Bilgilerim</h1>
                     <p class="small text-muted mb-0">
-                        Ad, soyad, iletişim ve saat dilimi ayarlarınızı güncelleyebilirsiniz.
+                        Ad, soyad, iletişim, saat dilimi ve varsayılan ders bilgilerinizi görüntüleyebilirsiniz.
                     </p>
                 </div>
                 <a class="btn btn-outline-primary btn-sm odys-touch-target px-3 fw-semibold"
@@ -19,6 +19,35 @@
                    asp-action="ChangePassword">
                     Şifre Değiştir
                 </a>
+            </div>
+
+            <!-- Varsayılan Ders Türü Bilgisi -->
+            <div class="p-3 rounded-3 border bg-light-subtle mb-4">
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+                    <div>
+                        <div class="small text-muted fw-semibold">Varsayılan Ders Türünüz</div>
+                        @if (!string.IsNullOrWhiteSpace(Model.DefaultSubjectName))
+                        {
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                <span class="odys-status-pill odys-status-active">
+                                    ★ @Model.DefaultSubjectName (Varsayılan)
+                                </span>
+                                @foreach (var subject in Model.ActiveSubjectNames.Where(s => !string.Equals(s, Model.DefaultSubjectName, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill px-3 py-1">
+                                        @subject
+                                    </span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-warning-emphasis small mt-1">
+                                Henüz tanımlı bir ders türünüz bulunmuyor. Öğrencilerinize ders atayabilmek için aşağıdan ilk (varsayılan) ders türünüzü tanımlayabilirsiniz.
+                            </div>
+                        }
+                    </div>
+                </div>
             </div>
 
             <form asp-controller="Account" asp-action="Profile" method="post" novalidate>
@@ -72,6 +101,18 @@
                         <label asp-for="CurrencyCode" class="form-label fw-semibold"></label>
                         <input asp-for="CurrencyCode" class="form-control bg-light" readonly />
                     </div>
+
+                    @if (!Model.HasAnyActiveSubject)
+                    {
+                        <div class="col-12">
+                            <div class="p-3 rounded-3 border border-warning bg-warning-subtle">
+                                <label asp-for="InitialSubjectName" class="form-label fw-semibold"></label>
+                                <input asp-for="InitialSubjectName" class="form-control" placeholder="Örn. Matematik" />
+                                <div class="form-text small">Tanımladığınız bu ilk ders otomatik olarak varsayılan dersiniz olacaktır.</div>
+                                <span asp-validation-for="InitialSubjectName" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    }
 
                     <div class="col-12 mt-4 d-flex justify-content-end">
                         <button type="submit" class="btn btn-primary odys-touch-target px-4 fw-semibold">
