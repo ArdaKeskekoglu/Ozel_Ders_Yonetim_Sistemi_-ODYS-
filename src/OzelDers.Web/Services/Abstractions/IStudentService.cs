@@ -9,7 +9,7 @@ public sealed record StudentOperationResult(
     IReadOnlyList<string> Errors);
 
 /// <summary>
-/// Öğrenci listeleme, arama, ekleme ve yönetim işlemlerini yürüten servis sözleşmesi (FR-007, FR-010..FR-021).
+/// Öğrenci listeleme, arama, ekleme, güncelleme ve arşivleme işlemlerini yürüten servis sözleşmesi (FR-007, FR-010..FR-021).
 /// </summary>
 public interface IStudentService
 {
@@ -22,5 +22,21 @@ public interface IStudentService
     Task<StudentOperationResult> CreateStudentAsync(
         string teacherId,
         CreateStudentViewModel model,
+        CancellationToken cancellationToken = default);
+
+    Task<EditStudentViewModel?> GetStudentForEditAsync(
+        string teacherId,
+        int studentId,
+        CancellationToken cancellationToken = default);
+
+    Task<StudentOperationResult> UpdateStudentAsync(
+        string teacherId,
+        EditStudentViewModel model,
+        CancellationToken cancellationToken = default);
+
+    Task<StudentOperationResult> SetStudentArchiveStatusAsync(
+        string teacherId,
+        int studentId,
+        bool isArchived,
         CancellationToken cancellationToken = default);
 }
