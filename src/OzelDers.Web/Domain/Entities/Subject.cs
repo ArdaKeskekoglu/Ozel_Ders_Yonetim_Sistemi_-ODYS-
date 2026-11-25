@@ -17,4 +17,6 @@ public class Subject : BaseEntity, ITeacherOwnedEntity
     public bool IsArchived { get; set; }
 
     public ApplicationUser? Teacher { get; set; }
+
+    public ICollection<StudentSubject> StudentSubjects { get; set; } = new List<StudentSubject>();
 }

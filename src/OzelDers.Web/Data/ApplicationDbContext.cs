@@ -19,6 +19,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Subject> Subjects => Set<Subject>();
 
+    public DbSet<StudentSubject> StudentSubjects => Set<StudentSubject>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

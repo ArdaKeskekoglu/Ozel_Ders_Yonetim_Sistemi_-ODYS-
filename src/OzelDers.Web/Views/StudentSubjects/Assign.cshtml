@@ -1,0 +1,120 @@
+@model AssignSubjectViewModel
+@{
+    ViewData["Title"] = $"{Model.StudentFullName} — Ders Türü Ata";
+}
+
+<div class="row justify-content-center py-3">
+    <div class="col-12 col-md-9 col-lg-7 col-xl-6">
+        <div class="odys-card p-4">
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4 border-bottom pb-3">
+                <div>
+                    <span class="odys-status-pill odys-status-active mb-2">Öğrenciye Ders Atama</span>
+                    <h1 class="h4 fw-bold mb-1">@Model.StudentFullName — Yeni Ders Türü Ata</h1>
+                    <p class="small text-muted mb-0">
+                        Varsayılan dersiniz otomatik seçili gelir; isterseniz başka bir ders türü seçip öğrenciye özel ücret ve haftalık hedef belirleyebilirsiniz.
+                    </p>
+                </div>
+                <a class="btn btn-outline-secondary btn-sm odys-touch-target px-3"
+                   asp-controller="StudentSubjects"
+                   asp-action="Index"
+                   asp-route-studentId="@Model.StudentId">
+                    ← Öğrenci Dersleri
+                </a>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Model.DefaultSubjectName))
+            {
+                <div class="alert alert-light border small py-2 mb-3">
+                    ★ Hesabınızın varsayılan ders türü: <strong>@Model.DefaultSubjectName</strong> (otomatik seçili gelir)
+                </div>
+            }
+
+            <form asp-controller="StudentSubjects" asp-action="Assign" method="post" novalidate>
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="StudentId" />
+                <input type="hidden" asp-for="StudentFullName" />
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" role="alert"></div>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label asp-for="SubjectId" class="form-label fw-semibold"></label>
+                        <select asp-for="SubjectId" class="form-select">
+                            @foreach (var option in Model.AvailableSubjects)
+                            {
+                                var label = option.Name;
+                                if (option.IsDefault)
+                                {
+                                    label += " (★ Varsayılan Ders)";
+                                }
+                                if (option.IsAlreadyAssignedActive)
+                                {
+                                    label += " — Zaten Atanmış";
+                                }
+                                <option value="@option.SubjectId" selected="@(Model.SubjectId == option.SubjectId)">
+                                    @label
+                                </option>
+                            }
+                        </select>
+                        <span asp-validation-for="SubjectId" class="text-danger small"></span>
+                        <div class="form-text small">
+                            Listede olmayan bir ders türü atamak için önce <a asp-controller="Subjects" asp-action="Create">Ders Türleri</a> sayfasından yeni ders ekleyebilirsiniz.
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label asp-for="HourlyRate" class="form-label fw-semibold"></label>
+                        <div class="input-group">
+                            <input asp-for="HourlyRate" type="number" step="0.01" min="1" max="1000000" class="form-control" />
+                            <span class="input-group-text">₺ / saat</span>
+                        </div>
+                        <span asp-validation-for="HourlyRate" class="text-danger small"></span>
+                        <div class="form-text small">
+                            60 dakikalık ders baz alınarak öğrenciye özel saatlik ücret.
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label asp-for="DefaultDurationMinutes" class="form-label fw-semibold"></label>
+                        <div class="input-group">
+                            <input asp-for="DefaultDurationMinutes" type="number" step="15" min="15" max="360" class="form-control" />
+                            <span class="input-group-text">dakika</span>
+                        </div>
+                        <span asp-validation-for="DefaultDurationMinutes" class="text-danger small"></span>
+                        <div class="form-text small">
+                            Her bir ders oturumunun varsayılan süresi (örn. 60 dk, 90 dk, 120 dk).
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label asp-for="WeeklyTargetCount" class="form-label fw-semibold"></label>
+                        <div class="input-group">
+                            <input asp-for="WeeklyTargetCount" type="number" step="1" min="1" max="21" class="form-control" />
+                            <span class="input-group-text">oturum / hafta</span>
+                        </div>
+                        <span asp-validation-for="WeeklyTargetCount" class="text-danger small"></span>
+                        <div class="form-text small">
+                            Haftada kaç ayrı ders oturumu yapılacağını belirtir (Örn. haftada 2 oturum × 60 dk ile 1 oturum × 120 dk otomatik programlamada ayrı korunur).
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-4 d-flex justify-content-end gap-2">
+                        <a class="btn btn-outline-secondary odys-touch-target px-4"
+                           asp-controller="StudentSubjects"
+                           asp-action="Index"
+                           asp-route-studentId="@Model.StudentId">
+                            İptal
+                        </a>
+                        <button type="submit" class="btn btn-primary odys-touch-target px-4 fw-semibold">
+                            Ders Türünü Ata
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

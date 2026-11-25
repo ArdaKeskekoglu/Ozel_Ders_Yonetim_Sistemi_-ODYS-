@@ -145,6 +145,12 @@ else
                             </td>
                             <td class="text-end pe-4">
                                 <div class="d-inline-flex align-items-center gap-2">
+                                    <a class="btn btn-outline-dark btn-sm odys-touch-target px-3"
+                                       asp-controller="StudentSubjects"
+                                       asp-action="Index"
+                                       asp-route-studentId="@student.Id">
+                                        Dersler &amp; Ücretler
+                                    </a>
                                     <a class="btn btn-outline-primary btn-sm odys-touch-target px-3"
                                        asp-controller="Students"
                                        asp-action="Edit"

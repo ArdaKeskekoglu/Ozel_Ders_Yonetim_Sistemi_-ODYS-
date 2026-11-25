@@ -309,6 +309,59 @@ namespace OzelDers.Web.Data.Migrations
                     b.ToTable("Students", (string)null);
                 });
 
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.StudentSubject", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DefaultDurationMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(60);
+
+                    b.Property<decimal>("HourlyRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WeeklyTargetCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("StudentId", "IsActive")
+                        .HasDatabaseName("IX_StudentSubjects_StudentId_IsActive");
+
+                    b.HasIndex("StudentId", "SubjectId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_StudentSubjects_StudentId_SubjectId");
+
+                    b.ToTable("StudentSubjects", (string)null);
+                });
+
             modelBuilder.Entity("OzelDers.Web.Domain.Entities.Subject", b =>
                 {
                     b.Property<int>("Id")
@@ -422,6 +475,25 @@ namespace OzelDers.Web.Data.Migrations
                     b.Navigation("Teacher");
                 });
 
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.StudentSubject", b =>
+                {
+                    b.HasOne("OzelDers.Web.Domain.Entities.Student", "Student")
+                        .WithMany("StudentSubjects")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OzelDers.Web.Domain.Entities.Subject", "Subject")
+                        .WithMany("StudentSubjects")
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Student");
+
+                    b.Navigation("Subject");
+                });
+
             modelBuilder.Entity("OzelDers.Web.Domain.Entities.Subject", b =>
                 {
                     b.HasOne("OzelDers.Web.Domain.Entities.ApplicationUser", "Teacher")
@@ -431,6 +503,16 @@ namespace OzelDers.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.Student", b =>
+                {
+                    b.Navigation("StudentSubjects");
+                });
+
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.Subject", b =>
+                {
+                    b.Navigation("StudentSubjects");
                 });
 #pragma warning restore 612, 618
         }

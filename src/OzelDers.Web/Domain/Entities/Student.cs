@@ -24,5 +24,7 @@ public class Student : BaseEntity, ITeacherOwnedEntity
 
     public ApplicationUser? Teacher { get; set; }
 
+    public ICollection<StudentSubject> StudentSubjects { get; set; } = new List<StudentSubject>();
+
     public string FullName => $"{FirstName} {LastName}".Trim();
 }
