@@ -40,6 +40,12 @@
                asp-route-id="@Model.Id">
                 Bilgileri Düzenle
             </a>
+            <a class="btn btn-outline-dark odys-touch-target px-3 fw-semibold"
+               asp-controller="Schedule"
+               asp-action="Create"
+               asp-route-studentId="@Model.Id">
+                + Takvime Ders Ekle
+            </a>
             <a class="btn btn-primary odys-touch-target px-3 fw-semibold"
                asp-controller="StudentSubjects"
                asp-action="Assign"

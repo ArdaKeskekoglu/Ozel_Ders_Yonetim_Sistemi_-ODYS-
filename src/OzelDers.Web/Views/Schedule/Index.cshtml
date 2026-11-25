@@ -56,6 +56,13 @@
                     Git
                 </button>
             </form>
+
+            <a class="btn btn-primary odys-touch-target px-3 fw-semibold"
+               asp-controller="Schedule"
+               asp-action="Create"
+               asp-route-date="@Model.WeekStartDate.ToString("yyyy-MM-dd")">
+                + Yeni Ders Ekle
+            </a>
         </div>
     </div>
 
@@ -119,10 +126,19 @@
                                 <div class="small text-muted">@day.ShortDateText</div>
                             </div>
                             <div class="text-end">
-                                @if (day.IsToday)
-                                {
-                                    <span class="badge bg-primary text-white rounded-pill mb-1 d-inline-block">Bugün</span>
-                                }
+                                <div class="d-flex align-items-center justify-content-end gap-1 mb-1">
+                                    @if (day.IsToday)
+                                    {
+                                        <span class="badge bg-primary text-white rounded-pill d-inline-block">Bugün</span>
+                                    }
+                                    <a class="btn btn-outline-primary btn-sm py-0 px-2 fw-bold"
+                                       asp-controller="Schedule"
+                                       asp-action="Create"
+                                       asp-route-date="@day.Date.ToString("yyyy-MM-dd")"
+                                       title="@day.DayNameTr (@day.ShortDateText) gününe ders ekle">
+                                        +
+                                    </a>
+                                </div>
                                 <div class="small text-muted">
                                     @day.ActiveLessonCount ders (@day.TotalActiveMinutes dk)
                                 </div>
