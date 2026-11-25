@@ -3,7 +3,7 @@ using OzelDers.Web.Domain.Enums;
 namespace OzelDers.Web.ViewModels.Schedule;
 
 /// <summary>
-/// Haftalık takvim ızgarasında tek bir ders oturumunu temsil eden kart görünüm modeli (FR-031, FR-044, FR-045).
+/// Haftalık takvim ızgarasında tek bir ders oturumunu temsil eden kart görünüm modeli (FR-031, FR-041, FR-044, FR-045).
 /// Her ders kartı yalnızca tek bir öğrenciye ve tek bir ders türüne (StudentSubjectId) aittir.
 /// </summary>
 public class ScheduleLessonCardViewModel
@@ -39,9 +39,15 @@ public class ScheduleLessonCardViewModel
     public string? Notes { get; init; }
 
     /// <summary>
-    /// Dersin saati geçmiş ancak durumu hâlâ Scheduled ise öğretmen yoklama doğrulaması bekliyor demektir (FR-060, FR-061).
+    /// Dersin saati geçmiş ancak durumu hâlâ Scheduled veya Rescheduled ise öğretmen yoklama doğrulaması bekliyor demektir (FR-060, FR-061).
     /// </summary>
     public bool IsPendingAttendanceVerification { get; init; }
+
+    public bool IsCancelled => Status == LessonStatus.Cancelled;
+
+    public bool IsRescheduled => Status == LessonStatus.Rescheduled;
+
+    public bool IsCompleted => Status == LessonStatus.Completed;
 
     public string TimeRangeText => $"{StartLocal:HH:mm} – {EndLocal:HH:mm}";
 
@@ -50,6 +56,7 @@ public class ScheduleLessonCardViewModel
         {
             LessonStatus.Completed => "Tamamlandı",
             LessonStatus.Cancelled => "İptal Edildi",
+            LessonStatus.Rescheduled when IsPendingAttendanceVerification => "Ertelendi • Yoklama Bekliyor",
             LessonStatus.Rescheduled => "Ertelendi",
             _ when IsPendingAttendanceVerification => "Yoklama Bekliyor",
             _ => "Planlandı"
@@ -59,9 +66,19 @@ public class ScheduleLessonCardViewModel
         Status switch
         {
             LessonStatus.Completed => "bg-success-subtle text-success-emphasis",
-            LessonStatus.Cancelled => "bg-secondary-subtle text-secondary-emphasis text-decoration-line-through",
+            LessonStatus.Cancelled => "bg-secondary-subtle text-secondary-emphasis",
+            LessonStatus.Rescheduled when IsPendingAttendanceVerification => "bg-warning-subtle text-warning-emphasis",
             LessonStatus.Rescheduled => "bg-info-subtle text-info-emphasis",
             _ when IsPendingAttendanceVerification => "bg-warning-subtle text-warning-emphasis",
             _ => "bg-primary-subtle text-primary-emphasis"
+        };
+
+    public string CardContainerCssClass =>
+        Status switch
+        {
+            LessonStatus.Cancelled => "bg-light border-secondary-subtle opacity-75",
+            LessonStatus.Rescheduled => "bg-white border-info",
+            LessonStatus.Completed => "bg-white border-success-subtle",
+            _ => "bg-white"
         };
 }

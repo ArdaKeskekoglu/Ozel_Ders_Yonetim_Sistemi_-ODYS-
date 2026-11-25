@@ -11,27 +11,19 @@ public sealed record ScheduleLessonOperationResult(
 
 /// <summary>
 /// Öğretmenin haftalık ders çizelgesini, hafta başlangıç/bitiş sınırlarını (Pazartesi–Pazar),
-/// önceki/sonraki hafta navigasyon verilerini, manuel ders ekleme ve ders düzenleme/taşıma
-/// işlemlerini yürüten servis sözleşmesi (FR-008, FR-031..FR-040, FR-043, FR-045).
+/// önceki/sonraki hafta navigasyon verilerini, manuel ders ekleme, ders düzenleme/taşıma,
+/// iptal, erteleme ve uygun koşullarda ders kaldırma işlemlerini yürüten servis sözleşmesi
+/// (FR-008, FR-031..FR-045, FR-059).
 /// </summary>
 public interface IScheduleService
 {
-    /// <summary>
-    /// Verilen referans tarihin içinde bulunduğu Pazartesi–Pazar haftasının başlangıç tarihini döndürür.
-    /// </summary>
     DateOnly GetMondayOfWeek(DateOnly referenceDate);
 
-    /// <summary>
-    /// Öğretmenin seçili haftadaki (Pazartesi–Pazar) ders oturumlarını ve hafta navigasyon modelini getirir.
-    /// </summary>
     Task<WeeklyScheduleViewModel> GetWeeklyScheduleAsync(
         string teacherId,
         DateOnly? referenceDate = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Manuel ders ekleme ekranı için öğretmenin aktif öğrenci–ders türü seçeneklerini ve varsayılan değerlerini hazırlar.
-    /// </summary>
     Task<CreateLessonViewModel> PrepareCreateLessonViewModelAsync(
         string teacherId,
         DateOnly? date = null,
@@ -39,28 +31,45 @@ public interface IScheduleService
         CreateLessonViewModel? existingModel = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Tek bir öğrenci–ders türü (StudentSubjectId) için tarih, saat, süre, aktiflik ve çakışma doğrulamalarını yaparak yeni ders oturumu oluşturur.
-    /// </summary>
     Task<ScheduleLessonOperationResult> CreateLessonAsync(
         string teacherId,
         CreateLessonViewModel model,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Mevcut bir ders oturumunu düzenlemek veya başka bir gün/saate taşımak için form modelini hazırlar.
-    /// </summary>
     Task<EditLessonViewModel?> GetLessonForEditAsync(
         string teacherId,
         int lessonId,
         EditLessonViewModel? existingModel = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Mevcut ders oturumunun gün, saat, süre, öğrenci–ders türü ve not bilgilerini kendisi hariç çakışma kontrolüyle günceller.
-    /// </summary>
     Task<ScheduleLessonOperationResult> UpdateLessonAsync(
         string teacherId,
         EditLessonViewModel model,
+        CancellationToken cancellationToken = default);
+
+    Task<ScheduleLessonOperationResult> CancelLessonAsync(
+        string teacherId,
+        int lessonId,
+        string? cancelReason = null,
+        CancellationToken cancellationToken = default);
+
+    Task<ScheduleLessonOperationResult> RestoreCancelledLessonAsync(
+        string teacherId,
+        int lessonId,
+        CancellationToken cancellationToken = default);
+
+    Task<RescheduleLessonViewModel?> GetLessonForRescheduleAsync(
+        string teacherId,
+        int lessonId,
+        CancellationToken cancellationToken = default);
+
+    Task<ScheduleLessonOperationResult> RescheduleLessonAsync(
+        string teacherId,
+        RescheduleLessonViewModel model,
+        CancellationToken cancellationToken = default);
+
+    Task<ScheduleLessonOperationResult> DeleteLessonAsync(
+        string teacherId,
+        int lessonId,
         CancellationToken cancellationToken = default);
 }

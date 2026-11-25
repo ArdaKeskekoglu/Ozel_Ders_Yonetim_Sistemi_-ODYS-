@@ -1,0 +1,126 @@
+@model RescheduleLessonViewModel
+@{
+    ViewData["Title"] = $"{Model.StudentFullName} — Dersi Ertele";
+}
+
+<div class="row justify-content-center py-3">
+    <div class="col-12 col-md-9 col-lg-7 col-xl-6">
+        <div class="odys-card p-4">
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4 border-bottom pb-3">
+                <div>
+                    <span class="odys-status-pill odys-status-active mb-2">Ders Erteleme &amp; Tarihçe İzi</span>
+                    <h1 class="h4 fw-bold mb-1">Dersi Başka Gün veya Saate Ertele</h1>
+                    <p class="small text-muted mb-0">
+                        Ders yeni gün/saate taşınır, durumu <strong>Ertelendi</strong> olarak işaretlenir ve önceki tarih/saat bilgisi ders notuna denetim izi olarak kaydedilir.
+                    </p>
+                </div>
+                <a class="btn btn-outline-secondary btn-sm odys-touch-target px-3"
+                   asp-controller="Schedule"
+                   asp-action="Index"
+                   asp-route-date="@Model.CurrentDate.ToString("yyyy-MM-dd")">
+                    ← Haftalık Takvim
+                </a>
+            </div>
+
+            <!-- Mevcut Ders Özeti -->
+            <div class="p-3 rounded-3 bg-light border mb-4 small">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <span class="text-muted">Öğrenci &amp; Ders:</span>
+                        <strong class="ms-1">@Model.StudentFullName — @Model.SubjectName</strong>
+                    </div>
+                    <div>
+                        <span class="text-muted">Mevcut Zaman:</span>
+                        <strong class="ms-1">
+                            @Model.CurrentDate.ToString("dd.MM.yyyy") (@Model.CurrentStartTime.ToString("HH:mm")–@Model.CurrentEndTime.ToString("HH:mm"))
+                        </strong>
+                    </div>
+                </div>
+            </div>
+
+            <form asp-controller="Schedule" asp-action="Reschedule" asp-route-id="@Model.LessonId" method="post" novalidate>
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="LessonId" />
+                <input type="hidden" asp-for="StudentId" />
+                <input type="hidden" asp-for="StudentFullName" />
+                <input type="hidden" asp-for="SubjectName" />
+                <input type="hidden" asp-for="CurrentDate" />
+                <input type="hidden" asp-for="CurrentStartTime" />
+                <input type="hidden" asp-for="CurrentEndTime" />
+                <input type="hidden" asp-for="CurrentDurationMinutes" />
+                <input type="hidden" asp-for="HourlyRateSnapshot" />
+                <input type="hidden" asp-for="SessionFeeSnapshot" />
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" role="alert"></div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-sm-6">
+                        <label asp-for="NewDate" class="form-label fw-semibold"></label>
+                        <input type="date"
+                               id="NewDate"
+                               name="NewDate"
+                               value="@Model.NewDate.ToString("yyyy-MM-dd")"
+                               class="form-control" />
+                        <span asp-validation-for="NewDate" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label asp-for="NewStartTime" class="form-label fw-semibold"></label>
+                        <input type="time"
+                               id="NewStartTime"
+                               name="NewStartTime"
+                               value="@Model.NewStartTime.ToString("HH:mm")"
+                               class="form-control" />
+                        <span asp-validation-for="NewStartTime" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label asp-for="NewDurationMinutes" class="form-label fw-semibold"></label>
+                        <div class="input-group">
+                            <input asp-for="NewDurationMinutes"
+                                   type="number"
+                                   step="15"
+                                   min="15"
+                                   max="360"
+                                   class="form-control" />
+                            <span class="input-group-text">dakika</span>
+                        </div>
+                        <span asp-validation-for="NewDurationMinutes" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label fw-semibold">Saatlik Ücret (Snapshot)</label>
+                        <div class="p-2 px-3 rounded-3 bg-light border d-flex flex-column justify-content-center" style="min-height: 38px;">
+                            <div class="fw-bold text-primary">@Model.HourlyRateSnapshot.ToString("N2") ₺ / saat</div>
+                            <div class="small text-muted">Orijinal ücret snapshot değeri korunur</div>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label asp-for="Reason" class="form-label fw-semibold"></label>
+                        <input asp-for="Reason"
+                               class="form-control"
+                               placeholder="Örn. Öğrenci sınav haftası nedeniyle ertelendi..." />
+                        <span asp-validation-for="Reason" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-12 mt-4 d-flex justify-content-end gap-2">
+                        <a class="btn btn-outline-secondary odys-touch-target px-4"
+                           asp-controller="Schedule"
+                           asp-action="Index"
+                           asp-route-date="@Model.CurrentDate.ToString("yyyy-MM-dd")">
+                            İptal
+                        </a>
+                        <button type="submit" class="btn btn-primary odys-touch-target px-4 fw-semibold">
+                            Dersi Ertele
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

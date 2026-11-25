@@ -28,7 +28,7 @@ public class ScheduleDayColumnViewModel
 }
 
 /// <summary>
-/// Haftalık ders programı ve hafta navigasyonu ekran görünüm modeli (FR-031..FR-034, FR-044, FR-045).
+/// Haftalık ders programı ve hafta navigasyonu ekran görünüm modeli (FR-031..FR-034, FR-041, FR-044, FR-045).
 /// </summary>
 public class WeeklyScheduleViewModel
 {
@@ -49,6 +49,8 @@ public class WeeklyScheduleViewModel
     public int TotalLessonCount { get; init; }
 
     public int ScheduledLessonCount { get; init; }
+
+    public int RescheduledLessonCount { get; init; }
 
     public int CompletedLessonCount { get; init; }
 

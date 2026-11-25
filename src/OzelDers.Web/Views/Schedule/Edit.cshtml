@@ -105,19 +105,69 @@
                         <span asp-validation-for="Notes" class="text-danger small"></span>
                     </div>
 
-                    <div class="col-12 mt-4 d-flex justify-content-end gap-2">
-                        <a class="btn btn-outline-secondary odys-touch-target px-4"
-                           asp-controller="Schedule"
-                           asp-action="Index"
-                           asp-route-date="@Model.LessonDate.ToString("yyyy-MM-dd")">
-                            İptal
-                        </a>
-                        <button type="submit" class="btn btn-primary odys-touch-target px-4 fw-semibold">
-                            Değişiklikleri Kaydet
-                        </button>
+                    <div class="col-12 mt-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div class="d-flex flex-wrap gap-2">
+                            @if (Model.Status != LessonStatus.Completed)
+                            {
+                                <a class="btn btn-outline-info btn-sm odys-touch-target px-3"
+                                   asp-controller="Schedule"
+                                   asp-action="Reschedule"
+                                   asp-route-id="@Model.Id">
+                                    Ertele
+                                </a>
+                            }
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a class="btn btn-outline-secondary odys-touch-target px-4"
+                               asp-controller="Schedule"
+                               asp-action="Index"
+                               asp-route-date="@Model.LessonDate.ToString("yyyy-MM-dd")">
+                                İptal
+                            </a>
+                            <button type="submit" class="btn btn-primary odys-touch-target px-4 fw-semibold">
+                                Değişiklikleri Kaydet
+                            </button>
+                        </div>
                     </div>
                 </div>
             </form>
+
+            @if (Model.Status != LessonStatus.Completed)
+            {
+                <hr class="my-4" />
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+                    <div class="small text-muted">
+                        Dersi takvimde geçmiş iziyle tutmak için <strong>İptal Et</strong>, tamamen silmek için <strong>Kaydı Kaldır</strong> seçeneğini kullanabilirsiniz.
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (Model.Status != LessonStatus.Cancelled)
+                        {
+                            <form asp-controller="Schedule"
+                                  asp-action="Cancel"
+                                  asp-route-id="@Model.Id"
+                                  method="post"
+                                  class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="returnDate" value="@Model.LessonDate.ToString("yyyy-MM-dd")" />
+                                <button type="submit" class="btn btn-outline-secondary btn-sm odys-touch-target px-3">
+                                    Dersi İptal Et
+                                </button>
+                            </form>
+                        }
+                        <form asp-controller="Schedule"
+                              asp-action="Delete"
+                              asp-route-id="@Model.Id"
+                              method="post"
+                              class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="returnDate" value="@Model.LessonDate.ToString("yyyy-MM-dd")" />
+                            <button type="submit" class="btn btn-outline-danger btn-sm odys-touch-target px-3">
+                                Kaydı Kaldır
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 </div>

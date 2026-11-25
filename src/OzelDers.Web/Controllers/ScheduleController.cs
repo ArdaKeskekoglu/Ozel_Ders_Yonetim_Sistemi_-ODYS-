@@ -171,4 +171,139 @@ public class ScheduleController : Controller
         TempData["SuccessMessage"] = result.InfoMessage ?? "Ders oturumu başarıyla güncellendi.";
         return RedirectToAction(nameof(Index), new { date = model.LessonDate.ToString("yyyy-MM-dd") });
     }
+
+    [HttpGet]
+    public async Task<IActionResult> Reschedule(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var viewModel = await _scheduleService.GetLessonForRescheduleAsync(
+            teacherId,
+            id,
+            cancellationToken);
+
+        if (viewModel is null)
+        {
+            return NotFound();
+        }
+
+        return View(viewModel);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reschedule(
+        int id,
+        RescheduleLessonViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        model.LessonId = id;
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _scheduleService.RescheduleLessonAsync(
+            teacherId,
+            model,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            return View(model);
+        }
+
+        TempData["SuccessMessage"] = result.InfoMessage ?? "Ders oturumu ertelendi.";
+        return RedirectToAction(nameof(Index), new { date = model.NewDate.ToString("yyyy-MM-dd") });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(
+        int id,
+        string? cancelReason = null,
+        DateOnly? returnDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _scheduleService.CancelLessonAsync(
+            teacherId,
+            id,
+            cancelReason,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            TempData["ErrorMessage"] = result.Errors.FirstOrDefault() ?? "Ders oturumu iptal edilemedi.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = result.InfoMessage;
+        }
+
+        return RedirectToAction(
+            nameof(Index),
+            returnDate.HasValue ? new { date = returnDate.Value.ToString("yyyy-MM-dd") } : null);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Restore(
+        int id,
+        DateOnly? returnDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _scheduleService.RestoreCancelledLessonAsync(
+            teacherId,
+            id,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            TempData["ErrorMessage"] = result.Errors.FirstOrDefault() ?? "İptal edilen ders yeniden aktifleştirilemedi.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = result.InfoMessage;
+        }
+
+        return RedirectToAction(
+            nameof(Index),
+            returnDate.HasValue ? new { date = returnDate.Value.ToString("yyyy-MM-dd") } : null);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(
+        int id,
+        DateOnly? returnDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _scheduleService.DeleteLessonAsync(
+            teacherId,
+            id,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            TempData["ErrorMessage"] = result.Errors.FirstOrDefault() ?? "Ders kaydı kaldırılamadı.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = result.InfoMessage;
+        }
+
+        return RedirectToAction(
+            nameof(Index),
+            returnDate.HasValue ? new { date = returnDate.Value.ToString("yyyy-MM-dd") } : null);
+    }
 }

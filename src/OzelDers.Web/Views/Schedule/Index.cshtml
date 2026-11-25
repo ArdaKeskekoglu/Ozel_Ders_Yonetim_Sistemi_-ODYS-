@@ -18,11 +18,11 @@
             </div>
             <h1 class="h4 fw-bold mb-1">@Model.WeekRangeTitle</h1>
             <p class="small text-muted mb-0">
-                Pazartesi–Pazar haftalık ders oturumlarınızı inceleyebilir, önceki veya sonraki haftalara geçebilir ya da doğrudan istediğiniz tarihe gidebilirsiniz.
+                Pazartesi–Pazar haftalık ders oturumlarınızı inceleyebilir, ders ekleyebilir, düzenleyebilir, erteleyebilir veya iptal edebilirsiniz.
             </p>
         </div>
 
-        <!-- Önceki / Bu Hafta / Sonraki ve Tarihe Git Kontrolleri -->
+        <!-- Önceki / Bu Hafta / Sonraki, Tarihe Git ve Yeni Ders Ekle Kontrolleri -->
         <div class="d-flex flex-wrap align-items-center gap-2">
             <div class="btn-group" role="group" aria-label="Hafta Navigasyonu">
                 <a class="btn btn-outline-secondary odys-touch-target px-3"
@@ -75,7 +75,12 @@
                 <div class="small text-muted">Bu Haftaki Ders Oturumu</div>
                 <div class="h5 fw-bold mb-0">@Model.TotalLessonCount Oturum</div>
                 <div class="small text-muted mt-1">
-                    Planlı: @Model.ScheduledLessonCount • Tamamlanan: @Model.CompletedLessonCount
+                    Planlı: @Model.ScheduledLessonCount
+                    @if (Model.RescheduledLessonCount > 0)
+                    {
+                        <span>• Ertelenen: @Model.RescheduledLessonCount</span>
+                    }
+                    • Tamamlanan: @Model.CompletedLessonCount
                     @if (Model.CancelledLessonCount > 0)
                     {
                         <span>• İptal: @Model.CancelledLessonCount</span>
@@ -87,7 +92,7 @@
             <div class="p-3 rounded-3 bg-light border h-100">
                 <div class="small text-muted">Toplam Aktif Ders Süresi</div>
                 <div class="h5 fw-bold mb-0">@Model.TotalActiveMinutes Dakika</div>
-                <div class="small text-muted mt-1">(@Math.Round(Model.TotalActiveMinutes / 60.0, 1) saat / hafta)</div>
+                <div class="small text-muted mt-1">(@Math.Round(Model.TotalActiveMinutes / 60.0, 1) saat / hafta • iptaller hariç)</div>
             </div>
         </div>
         <div class="col-12 col-sm-6 col-lg-3">
@@ -140,7 +145,7 @@
                                     </a>
                                 </div>
                                 <div class="small text-muted">
-                                    @day.ActiveLessonCount ders (@day.TotalActiveMinutes dk)
+                                    @day.ActiveLessonCount aktif ders (@day.TotalActiveMinutes dk)
                                 </div>
                             </div>
                         </div>
@@ -159,17 +164,19 @@
                         {
                             @foreach (var lesson in day.Lessons)
                             {
-                                <article class="p-3 rounded-3 border bg-white shadow-sm"
+                                <article class="p-3 rounded-3 border shadow-sm @lesson.CardContainerCssClass"
                                          aria-label="@lesson.StudentFullName - @lesson.SubjectName (@lesson.TimeRangeText)">
                                     <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
-                                        <span class="fw-bold small text-dark">@lesson.TimeRangeText</span>
+                                        <span class="fw-bold small @(lesson.IsCancelled ? "text-muted text-decoration-line-through" : "text-dark")">
+                                            @lesson.TimeRangeText
+                                        </span>
                                         <span class="badge rounded-pill @lesson.StatusBadgeCssClass">
                                             @lesson.StatusBadgeText
                                         </span>
                                     </div>
 
-                                    <div class="fw-semibold">
-                                        <a class="text-decoration-none text-dark"
+                                    <div class="fw-semibold @(lesson.IsCancelled ? "text-decoration-line-through text-muted" : "")">
+                                        <a class="text-decoration-none @(lesson.IsCancelled ? "text-muted" : "text-dark")"
                                            asp-controller="Students"
                                            asp-action="Details"
                                            asp-route-id="@lesson.StudentId">
@@ -178,10 +185,10 @@
                                     </div>
 
                                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-1 mt-1">
-                                        <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">
+                                        <span class="badge @(lesson.IsCancelled ? "bg-secondary-subtle text-secondary-emphasis" : "bg-primary-subtle text-primary-emphasis") rounded-pill">
                                             @lesson.SubjectName
                                         </span>
-                                        <span class="small text-muted">
+                                        <span class="small text-muted @(lesson.IsCancelled ? "text-decoration-line-through" : "")">
                                             @lesson.DurationMinutes dk • @lesson.SessionFeeSnapshot.ToString("N0") ₺
                                         </span>
                                     </div>
@@ -193,13 +200,48 @@
                                         </div>
                                     }
 
-                                    <div class="mt-2 pt-2 border-top d-flex justify-content-end">
-                                        <a class="btn btn-outline-primary btn-sm py-0 px-2"
-                                           asp-controller="Schedule"
-                                           asp-action="Edit"
-                                           asp-route-id="@lesson.LessonId">
-                                            Düzenle / Taşı
-                                        </a>
+                                    <!-- Kart İşlemleri: Düzenle, Ertele, İptal Et / Yeniden Aktif Et -->
+                                    <div class="mt-2 pt-2 border-top d-flex flex-wrap justify-content-end gap-1">
+                                        @if (lesson.IsCancelled)
+                                        {
+                                            <form asp-controller="Schedule"
+                                                  asp-action="Restore"
+                                                  asp-route-id="@lesson.LessonId"
+                                                  method="post"
+                                                  class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="returnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                                                <button type="submit" class="btn btn-outline-success btn-sm py-0 px-2">
+                                                    Yeniden Aktif Et
+                                                </button>
+                                            </form>
+                                        }
+                                        else if (!lesson.IsCompleted)
+                                        {
+                                            <a class="btn btn-outline-primary btn-sm py-0 px-2"
+                                               asp-controller="Schedule"
+                                               asp-action="Edit"
+                                               asp-route-id="@lesson.LessonId">
+                                                Düzenle
+                                            </a>
+                                            <a class="btn btn-outline-info btn-sm py-0 px-2"
+                                               asp-controller="Schedule"
+                                               asp-action="Reschedule"
+                                               asp-route-id="@lesson.LessonId">
+                                                Ertele
+                                            </a>
+                                            <form asp-controller="Schedule"
+                                                  asp-action="Cancel"
+                                                  asp-route-id="@lesson.LessonId"
+                                                  method="post"
+                                                  class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="returnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                                                <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2">
+                                                    İptal Et
+                                                </button>
+                                            </form>
+                                        }
                                     </div>
                                 </article>
                             }
