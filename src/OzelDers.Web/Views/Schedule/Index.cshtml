@@ -1,0 +1,187 @@
+@model WeeklyScheduleViewModel
+@{
+    ViewData["Title"] = $"Haftalık Ders Programı ({Model.WeekRangeTitle})";
+}
+
+<!-- Üst Başlık ve Hafta Navigasyon Çubuğu (FR-031..FR-034) -->
+<section class="odys-card p-4 mb-4">
+    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-start align-items-xl-center gap-3">
+        <div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <span class="odys-status-pill odys-status-active">Haftalık Ders Çizelgesi</span>
+                @if (Model.IsCurrentWeek)
+                {
+                    <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill px-3 py-1">
+                        Bu Hafta
+                    </span>
+                }
+            </div>
+            <h1 class="h4 fw-bold mb-1">@Model.WeekRangeTitle</h1>
+            <p class="small text-muted mb-0">
+                Pazartesi–Pazar haftalık ders oturumlarınızı inceleyebilir, önceki veya sonraki haftalara geçebilir ya da doğrudan istediğiniz tarihe gidebilirsiniz.
+            </p>
+        </div>
+
+        <!-- Önceki / Bu Hafta / Sonraki ve Tarihe Git Kontrolleri -->
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="btn-group" role="group" aria-label="Hafta Navigasyonu">
+                <a class="btn btn-outline-secondary odys-touch-target px-3"
+                   asp-controller="Schedule"
+                   asp-action="Index"
+                   asp-route-date="@Model.PreviousWeekStartDate.ToString("yyyy-MM-dd")">
+                    ← Önceki Hafta
+                </a>
+                <a class="btn @(Model.IsCurrentWeek ? "btn-primary" : "btn-outline-primary") odys-touch-target px-3 fw-semibold"
+                   asp-controller="Schedule"
+                   asp-action="Index"
+                   asp-route-date="@Model.CurrentWeekStartDate.ToString("yyyy-MM-dd")">
+                    Bu Hafta
+                </a>
+                <a class="btn btn-outline-secondary odys-touch-target px-3"
+                   asp-controller="Schedule"
+                   asp-action="Index"
+                   asp-route-date="@Model.NextWeekStartDate.ToString("yyyy-MM-dd")">
+                    Sonraki Hafta →
+                </a>
+            </div>
+
+            <form asp-controller="Schedule" asp-action="Index" method="get" class="d-flex align-items-center gap-2">
+                <label for="scheduleDatePicker" class="visually-hidden">Belirli Bir Haftaya Git</label>
+                <input type="date"
+                       id="scheduleDatePicker"
+                       name="date"
+                       value="@Model.WeekStartDate.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm odys-touch-target" />
+                <button type="submit" class="btn btn-outline-dark btn-sm odys-touch-target px-3 fw-semibold">
+                    Git
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <hr class="my-3" />
+
+    <!-- Haftalık Özet Metrikleri -->
+    <div class="row g-3">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Bu Haftaki Ders Oturumu</div>
+                <div class="h5 fw-bold mb-0">@Model.TotalLessonCount Oturum</div>
+                <div class="small text-muted mt-1">
+                    Planlı: @Model.ScheduledLessonCount • Tamamlanan: @Model.CompletedLessonCount
+                    @if (Model.CancelledLessonCount > 0)
+                    {
+                        <span>• İptal: @Model.CancelledLessonCount</span>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Toplam Aktif Ders Süresi</div>
+                <div class="h5 fw-bold mb-0">@Model.TotalActiveMinutes Dakika</div>
+                <div class="small text-muted mt-1">(@Math.Round(Model.TotalActiveMinutes / 60.0, 1) saat / hafta)</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Haftalık Ders Ücreti Toplamı</div>
+                <div class="h5 fw-bold text-primary mb-0">@Model.TotalActiveFeeSnapshot.ToString("N2") ₺</div>
+                <div class="small text-muted mt-1">İptal edilmeyen oturumların snapshot toplamı</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Yoklama Doğrulaması Bekleyen</div>
+                <div class="h5 fw-bold @(Model.PendingVerificationCount > 0 ? "text-warning-emphasis" : "") mb-0">
+                    @Model.PendingVerificationCount Oturum
+                </div>
+                <div class="small text-muted mt-1">Saati geçen dersler otomatik tamamlanmaz</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 7 Günlük Haftalık Takvim Izgarası (Pazartesi – Pazar) -->
+<section aria-label="7 Günlük Haftalık Ders Takvimi">
+    <div class="row g-3">
+        @foreach (var day in Model.Days)
+        {
+            <div class="col-12 col-md-6 col-xl">
+                <div class="odys-card h-100 d-flex flex-column @(day.IsToday ? "border-primary border-2" : "")">
+                    <!-- Gün Başlığı -->
+                    <div class="p-3 border-bottom @(day.IsToday ? "bg-primary-subtle" : "bg-light")">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold @(day.IsToday ? "text-primary-emphasis" : "")">
+                                    @day.DayNameTr
+                                </div>
+                                <div class="small text-muted">@day.ShortDateText</div>
+                            </div>
+                            <div class="text-end">
+                                @if (day.IsToday)
+                                {
+                                    <span class="badge bg-primary text-white rounded-pill mb-1 d-inline-block">Bugün</span>
+                                }
+                                <div class="small text-muted">
+                                    @day.ActiveLessonCount ders (@day.TotalActiveMinutes dk)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Günün Ders Oturumu Kartları -->
+                    <div class="p-3 flex-grow-1 d-flex flex-column gap-2">
+                        @if (day.Lessons.Count == 0)
+                        {
+                            <div class="text-center text-muted small my-auto py-4">
+                                <div class="mb-1">—</div>
+                                <div>Planlı ders yok</div>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var lesson in day.Lessons)
+                            {
+                                <article class="p-3 rounded-3 border bg-white shadow-sm"
+                                         aria-label="@lesson.StudentFullName - @lesson.SubjectName (@lesson.TimeRangeText)">
+                                    <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
+                                        <span class="fw-bold small text-dark">@lesson.TimeRangeText</span>
+                                        <span class="badge rounded-pill @lesson.StatusBadgeCssClass">
+                                            @lesson.StatusBadgeText
+                                        </span>
+                                    </div>
+
+                                    <div class="fw-semibold">
+                                        <a class="text-decoration-none text-dark"
+                                           asp-controller="Students"
+                                           asp-action="Details"
+                                           asp-route-id="@lesson.StudentId">
+                                            @lesson.StudentFullName
+                                        </a>
+                                    </div>
+
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-1 mt-1">
+                                        <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">
+                                            @lesson.SubjectName
+                                        </span>
+                                        <span class="small text-muted">
+                                            @lesson.DurationMinutes dk • @lesson.SessionFeeSnapshot.ToString("N0") ₺
+                                        </span>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(lesson.Notes))
+                                    {
+                                        <div class="small text-muted mt-2 pt-2 border-top text-truncate" title="@lesson.Notes">
+                                            @lesson.Notes
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
