@@ -41,6 +41,8 @@ public class StudentSubject : BaseEntity
 
     public Subject? Subject { get; set; }
 
+    public ICollection<Lesson> Lessons { get; set; } = new List<Lesson>();
+
     /// <summary>
     /// Saatlik ücret ve varsayılan oturum süresine göre tek bir oturumun hesaplanan ücreti.
     /// </summary>

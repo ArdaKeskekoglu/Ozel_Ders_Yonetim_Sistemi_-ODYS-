@@ -255,6 +255,65 @@ namespace OzelDers.Web.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.Lesson", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DurationMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(60);
+
+                    b.Property<DateTime>("EndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("HourlyRateSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("SessionFeeSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("StudentSubjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_Lessons_Status");
+
+                    b.HasIndex("StartUtc", "EndUtc")
+                        .HasDatabaseName("IX_Lessons_StartUtc_EndUtc");
+
+                    b.HasIndex("StudentSubjectId", "StartUtc")
+                        .HasDatabaseName("IX_Lessons_StudentSubjectId_StartUtc");
+
+                    b.ToTable("Lessons", (string)null);
+                });
+
             modelBuilder.Entity("OzelDers.Web.Domain.Entities.Student", b =>
                 {
                     b.Property<int>("Id")
@@ -464,6 +523,17 @@ namespace OzelDers.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.Lesson", b =>
+                {
+                    b.HasOne("OzelDers.Web.Domain.Entities.StudentSubject", "StudentSubject")
+                        .WithMany("Lessons")
+                        .HasForeignKey("StudentSubjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StudentSubject");
+                });
+
             modelBuilder.Entity("OzelDers.Web.Domain.Entities.Student", b =>
                 {
                     b.HasOne("OzelDers.Web.Domain.Entities.ApplicationUser", "Teacher")
@@ -508,6 +578,11 @@ namespace OzelDers.Web.Data.Migrations
             modelBuilder.Entity("OzelDers.Web.Domain.Entities.Student", b =>
                 {
                     b.Navigation("StudentSubjects");
+                });
+
+            modelBuilder.Entity("OzelDers.Web.Domain.Entities.StudentSubject", b =>
+                {
+                    b.Navigation("Lessons");
                 });
 
             modelBuilder.Entity("OzelDers.Web.Domain.Entities.Subject", b =>
