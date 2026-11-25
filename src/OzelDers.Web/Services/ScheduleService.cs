@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Data;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using OzelDers.Web.Data;
@@ -10,13 +12,21 @@ namespace OzelDers.Web.Services;
 
 /// <summary>
 /// Öğretmenin haftalık ders çizelgesini (Pazartesi–Pazar), önceki/sonraki hafta navigasyonunu,
-/// ders kartlarını, manuel ders oturumu oluşturma, düzenleme, iptal, erteleme ve kaldırma
-/// işlemlerini yürüten servis (FR-008, FR-030..FR-045, FR-059, NFR-007).
+/// ders kartlarını, manuel ders oturumu oluşturma, düzenleme, iptal, erteleme, kaldırma
+/// ve eşzamanlılık/çakışma korumasını yürüten servis (FR-008, FR-030..FR-045, FR-059, NFR-007).
 /// </summary>
 public class ScheduleService : IScheduleService
 {
     private static readonly CultureInfo TrCulture = CultureInfo.GetCultureInfo("tr-TR");
     private static readonly TimeZoneInfo DefaultTurkeyTimeZone = ResolveTurkeyTimeZone();
+
+    /// <summary>
+    /// Aynı öğretmenin takvim yazma işlemlerinde eşzamanlı yarış durumlarını (TOCTOU race condition)
+    /// uygulama katmanında seri hâle getiren öğretmen bazlı kilit tablosu.
+    /// İlişkisel veritabanında buna ek olarak Serializable transaction katmanı da çalıştırılır.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> TeacherScheduleLocks =
+        new(StringComparer.Ordinal);
 
     private readonly ApplicationDbContext _dbContext;
     private readonly TimeZoneInfo _timeZone;
@@ -219,71 +229,77 @@ public class ScheduleService : IScheduleService
             return Fail("Ders notu en fazla 1000 karakter olabilir.");
         }
 
-        var enrollment = await _dbContext.StudentSubjects
-            .Include(ss => ss.Student)
-            .Include(ss => ss.Subject)
-            .FirstOrDefaultAsync(
-                ss => ss.Id == model.StudentSubjectId &&
-                      ss.Student != null &&
-                      ss.Student.TeacherId == teacherId &&
-                      ss.Subject != null &&
-                      ss.Subject.TeacherId == teacherId,
-                cancellationToken);
-
-        if (enrollment is null || enrollment.Student is null || enrollment.Subject is null)
-        {
-            return Fail("Seçilen öğrenci ve ders türü eşleşmesi bulunamadı veya hesabınıza ait değil.");
-        }
-
-        if (enrollment.Student.IsArchived)
-        {
-            return Fail($"'{enrollment.Student.FullName}' adlı öğrenci arşivlenmiş durumda olduğundan yeni ders oturumu eklenemez.");
-        }
-
-        if (enrollment.Subject.IsArchived)
-        {
-            return Fail($"'{enrollment.Subject.Name}' ders türü arşivlenmiş durumda olduğundan yeni ders oturumu eklenemez.");
-        }
-
-        if (!enrollment.IsActive)
-        {
-            return Fail($"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' ders ataması pasif durumda olduğundan yeni ders oturumu eklenemez.");
-        }
-
-        var startLocal = model.LessonDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
-        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
-        var endUtc = startUtc.AddMinutes(model.DurationMinutes);
-
-        var conflictError = await CheckTeacherTimeConflictAsync(
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
             teacherId,
-            startUtc,
-            endUtc,
-            excludeLessonId: null,
+            async ct =>
+            {
+                var enrollment = await _dbContext.StudentSubjects
+                    .Include(ss => ss.Student)
+                    .Include(ss => ss.Subject)
+                    .FirstOrDefaultAsync(
+                        ss => ss.Id == model.StudentSubjectId &&
+                              ss.Student != null &&
+                              ss.Student.TeacherId == teacherId &&
+                              ss.Subject != null &&
+                              ss.Subject.TeacherId == teacherId,
+                        ct);
+
+                if (enrollment is null || enrollment.Student is null || enrollment.Subject is null)
+                {
+                    return Fail("Seçilen öğrenci ve ders türü eşleşmesi bulunamadı veya hesabınıza ait değil.");
+                }
+
+                if (enrollment.Student.IsArchived)
+                {
+                    return Fail($"'{enrollment.Student.FullName}' adlı öğrenci arşivlenmiş durumda olduğundan yeni ders oturumu eklenemez.");
+                }
+
+                if (enrollment.Subject.IsArchived)
+                {
+                    return Fail($"'{enrollment.Subject.Name}' ders türü arşivlenmiş durumda olduğundan yeni ders oturumu eklenemez.");
+                }
+
+                if (!enrollment.IsActive)
+                {
+                    return Fail($"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' ders ataması pasif durumda olduğundan yeni ders oturumu eklenemez.");
+                }
+
+                var startLocal = model.LessonDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
+                var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
+                var endUtc = startUtc.AddMinutes(model.DurationMinutes);
+
+                var conflictError = await CheckTeacherTimeConflictAsync(
+                    teacherId,
+                    startUtc,
+                    endUtc,
+                    excludeLessonId: null,
+                    ct);
+
+                if (conflictError is not null)
+                {
+                    return Fail(conflictError);
+                }
+
+                var lesson = Lesson.CreateFromStudentSubject(
+                    enrollment,
+                    startUtc,
+                    model.DurationMinutes,
+                    model.Notes);
+
+                _dbContext.Lessons.Add(lesson);
+                await _dbContext.SaveChangesAsync(ct);
+
+                var endLocal = startLocal.AddMinutes(model.DurationMinutes);
+                var infoMessage =
+                    $"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' dersi ({model.LessonDate:dd.MM.yyyy} {startLocal:HH:mm}–{endLocal:HH:mm}, {lesson.SessionFeeSnapshot:N2} ₺) takvime eklendi.";
+
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    infoMessage,
+                    Array.Empty<string>());
+            },
             cancellationToken);
-
-        if (conflictError is not null)
-        {
-            return Fail(conflictError);
-        }
-
-        var lesson = Lesson.CreateFromStudentSubject(
-            enrollment,
-            startUtc,
-            model.DurationMinutes,
-            model.Notes);
-
-        _dbContext.Lessons.Add(lesson);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        var endLocal = startLocal.AddMinutes(model.DurationMinutes);
-        var infoMessage =
-            $"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' dersi ({model.LessonDate:dd.MM.yyyy} {startLocal:HH:mm}–{endLocal:HH:mm}, {lesson.SessionFeeSnapshot:N2} ₺) takvime eklendi.";
-
-        return new ScheduleLessonOperationResult(
-            true,
-            lesson,
-            infoMessage,
-            Array.Empty<string>());
     }
 
     public async Task<EditLessonViewModel?> GetLessonForEditAsync(
@@ -387,95 +403,101 @@ public class ScheduleService : IScheduleService
             return Fail("Ders notu en fazla 1000 karakter olabilir.");
         }
 
-        var lesson = await GetOwnedLessonAsync(teacherId, model.Id, cancellationToken);
-        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
-        {
-            return Fail("Düzenlenmek istenen ders oturumu bulunamadı veya bu ders üzerinde yetkiniz yok.");
-        }
-
-        var targetEnrollment = lesson.StudentSubject;
-        var isSubjectChanged = model.StudentSubjectId != lesson.StudentSubjectId;
-
-        if (isSubjectChanged)
-        {
-            var newEnrollment = await _dbContext.StudentSubjects
-                .Include(ss => ss.Student)
-                .Include(ss => ss.Subject)
-                .FirstOrDefaultAsync(
-                    ss => ss.Id == model.StudentSubjectId &&
-                          ss.Student != null &&
-                          ss.Student.TeacherId == teacherId &&
-                          ss.Subject != null &&
-                          ss.Subject.TeacherId == teacherId,
-                    cancellationToken);
-
-            if (newEnrollment is null || newEnrollment.Student is null || newEnrollment.Subject is null)
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
+            teacherId,
+            async ct =>
             {
-                return Fail("Seçilen yeni öğrenci ve ders türü eşleşmesi bulunamadı veya hesabınıza ait değil.");
-            }
+                var lesson = await GetOwnedLessonAsync(teacherId, model.Id, ct);
+                if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+                {
+                    return Fail("Düzenlenmek istenen ders oturumu bulunamadı veya bu ders üzerinde yetkiniz yok.");
+                }
 
-            if (newEnrollment.Student.IsArchived)
-            {
-                return Fail($"'{newEnrollment.Student.FullName}' adlı öğrenci arşivlenmiş durumda olduğundan derse atanamaz.");
-            }
+                var targetEnrollment = lesson.StudentSubject;
+                var isSubjectChanged = model.StudentSubjectId != lesson.StudentSubjectId;
 
-            if (newEnrollment.Subject.IsArchived)
-            {
-                return Fail($"'{newEnrollment.Subject.Name}' ders türü arşivlenmiş durumda olduğundan derse atanamaz.");
-            }
+                if (isSubjectChanged)
+                {
+                    var newEnrollment = await _dbContext.StudentSubjects
+                        .Include(ss => ss.Student)
+                        .Include(ss => ss.Subject)
+                        .FirstOrDefaultAsync(
+                            ss => ss.Id == model.StudentSubjectId &&
+                                  ss.Student != null &&
+                                  ss.Student.TeacherId == teacherId &&
+                                  ss.Subject != null &&
+                                  ss.Subject.TeacherId == teacherId,
+                            ct);
 
-            if (!newEnrollment.IsActive)
-            {
-                return Fail($"{newEnrollment.Student.FullName} — '{newEnrollment.Subject.Name}' ders ataması pasif durumda olduğundan seçilemez.");
-            }
+                    if (newEnrollment is null || newEnrollment.Student is null || newEnrollment.Subject is null)
+                    {
+                        return Fail("Seçilen yeni öğrenci ve ders türü eşleşmesi bulunamadı veya hesabınıza ait değil.");
+                    }
 
-            targetEnrollment = newEnrollment;
-        }
+                    if (newEnrollment.Student.IsArchived)
+                    {
+                        return Fail($"'{newEnrollment.Student.FullName}' adlı öğrenci arşivlenmiş durumda olduğundan derse atanamaz.");
+                    }
 
-        var startLocal = model.LessonDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
-        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
-        var endUtc = startUtc.AddMinutes(model.DurationMinutes);
+                    if (newEnrollment.Subject.IsArchived)
+                    {
+                        return Fail($"'{newEnrollment.Subject.Name}' ders türü arşivlenmiş durumda olduğundan derse atanamaz.");
+                    }
 
-        if (lesson.Status != LessonStatus.Cancelled)
-        {
-            var conflictError = await CheckTeacherTimeConflictAsync(
-                teacherId,
-                startUtc,
-                endUtc,
-                excludeLessonId: lesson.Id,
-                cancellationToken);
+                    if (!newEnrollment.IsActive)
+                    {
+                        return Fail($"{newEnrollment.Student.FullName} — '{newEnrollment.Subject.Name}' ders ataması pasif durumda olduğundan seçilemez.");
+                    }
 
-            if (conflictError is not null)
-            {
-                return Fail(conflictError);
-            }
-        }
+                    targetEnrollment = newEnrollment;
+                }
 
-        if (isSubjectChanged)
-        {
-            lesson.StudentSubjectId = targetEnrollment.Id;
-            lesson.HourlyRateSnapshot = decimal.Round(targetEnrollment.HourlyRate, 2);
-        }
+                var startLocal = model.LessonDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
+                var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
+                var endUtc = startUtc.AddMinutes(model.DurationMinutes);
 
-        lesson.StartUtc = startUtc;
-        lesson.EndUtc = endUtc;
-        lesson.DurationMinutes = model.DurationMinutes;
-        lesson.SessionFeeSnapshot = Lesson.CalculateSessionFee(lesson.HourlyRateSnapshot, model.DurationMinutes);
-        lesson.Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim();
+                if (lesson.Status != LessonStatus.Cancelled)
+                {
+                    var conflictError = await CheckTeacherTimeConflictAsync(
+                        teacherId,
+                        startUtc,
+                        endUtc,
+                        excludeLessonId: lesson.Id,
+                        ct);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                    if (conflictError is not null)
+                    {
+                        return Fail(conflictError);
+                    }
+                }
 
-        var endLocal = startLocal.AddMinutes(model.DurationMinutes);
-        var studentName = targetEnrollment.Student?.FullName ?? "Öğrenci";
-        var subjectName = targetEnrollment.Subject?.Name ?? "Ders";
-        var infoMessage =
-            $"{studentName} — '{subjectName}' dersi ({model.LessonDate:dd.MM.yyyy} {startLocal:HH:mm}–{endLocal:HH:mm}, {lesson.SessionFeeSnapshot:N2} ₺) olarak güncellendi.";
+                if (isSubjectChanged)
+                {
+                    lesson.StudentSubjectId = targetEnrollment.Id;
+                    lesson.HourlyRateSnapshot = decimal.Round(targetEnrollment.HourlyRate, 2);
+                }
 
-        return new ScheduleLessonOperationResult(
-            true,
-            lesson,
-            infoMessage,
-            Array.Empty<string>());
+                lesson.StartUtc = startUtc;
+                lesson.EndUtc = endUtc;
+                lesson.DurationMinutes = model.DurationMinutes;
+                lesson.SessionFeeSnapshot = Lesson.CalculateSessionFee(lesson.HourlyRateSnapshot, model.DurationMinutes);
+                lesson.Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim();
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                var endLocal = startLocal.AddMinutes(model.DurationMinutes);
+                var studentName = targetEnrollment.Student?.FullName ?? "Öğrenci";
+                var subjectName = targetEnrollment.Subject?.Name ?? "Ders";
+                var infoMessage =
+                    $"{studentName} — '{subjectName}' dersi ({model.LessonDate:dd.MM.yyyy} {startLocal:HH:mm}–{endLocal:HH:mm}, {lesson.SessionFeeSnapshot:N2} ₺) olarak güncellendi.";
+
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    infoMessage,
+                    Array.Empty<string>());
+            },
+            cancellationToken);
     }
 
     public async Task<ScheduleLessonOperationResult> CancelLessonAsync(
@@ -489,45 +511,51 @@ public class ScheduleService : IScheduleService
             return Fail("Öğretmen kimliği doğrulanamadı.");
         }
 
-        var lesson = await GetOwnedLessonAsync(teacherId, lessonId, cancellationToken);
-        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
-        {
-            return Fail("İptal edilmek istenen ders oturumu bulunamadı veya yetkiniz yok.");
-        }
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
+            teacherId,
+            async ct =>
+            {
+                var lesson = await GetOwnedLessonAsync(teacherId, lessonId, ct);
+                if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+                {
+                    return Fail("İptal edilmek istenen ders oturumu bulunamadı veya yetkiniz yok.");
+                }
 
-        if (lesson.Status == LessonStatus.Completed)
-        {
-            return Fail("Tamamlanmış bir ders oturumu doğrudan takvimden iptal edilemez.");
-        }
+                if (lesson.Status == LessonStatus.Completed)
+                {
+                    return Fail("Tamamlanmış bir ders oturumu doğrudan takvimden iptal edilemez.");
+                }
 
-        if (lesson.Status == LessonStatus.Cancelled)
-        {
-            return new ScheduleLessonOperationResult(
-                true,
-                lesson,
-                "Ders oturumu zaten iptal edilmiş durumda.",
-                Array.Empty<string>());
-        }
+                if (lesson.Status == LessonStatus.Cancelled)
+                {
+                    return new ScheduleLessonOperationResult(
+                        true,
+                        lesson,
+                        "Ders oturumu zaten iptal edilmiş durumda.",
+                        Array.Empty<string>());
+                }
 
-        lesson.Status = LessonStatus.Cancelled;
+                lesson.Status = LessonStatus.Cancelled;
 
-        if (!string.IsNullOrWhiteSpace(cancelReason))
-        {
-            var cancelNote = $"[İptal: {cancelReason.Trim()}]";
-            lesson.Notes = AppendNoteWithLimit(lesson.Notes, cancelNote);
-        }
+                if (!string.IsNullOrWhiteSpace(cancelReason))
+                {
+                    var cancelNote = $"[İptal: {cancelReason.Trim()}]";
+                    lesson.Notes = AppendNoteWithLimit(lesson.Notes, cancelNote);
+                }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                await _dbContext.SaveChangesAsync(ct);
 
-        var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
-            _timeZone);
+                var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
+                    _timeZone);
 
-        return new ScheduleLessonOperationResult(
-            true,
-            lesson,
-            $"{lesson.StudentSubject.Student.FullName} — '{lesson.StudentSubject.Subject.Name}' ({startLocal:dd.MM.yyyy HH:mm}) dersi iptal edildi. Bu saat aralığı yeni dersler için serbest bırakıldı.",
-            Array.Empty<string>());
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    $"{lesson.StudentSubject.Student.FullName} — '{lesson.StudentSubject.Subject.Name}' ({startLocal:dd.MM.yyyy HH:mm}) dersi iptal edildi. Bu saat aralığı yeni dersler için serbest bırakıldı.",
+                    Array.Empty<string>());
+            },
+            cancellationToken);
     }
 
     public async Task<ScheduleLessonOperationResult> RestoreCancelledLessonAsync(
@@ -540,51 +568,57 @@ public class ScheduleService : IScheduleService
             return Fail("Öğretmen kimliği doğrulanamadı.");
         }
 
-        var lesson = await GetOwnedLessonAsync(teacherId, lessonId, cancellationToken);
-        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
-        {
-            return Fail("Ders oturumu bulunamadı veya yetkiniz yok.");
-        }
-
-        if (lesson.Status != LessonStatus.Cancelled)
-        {
-            return Fail("Yalnızca iptal edilmiş bir ders oturumu yeniden planlı duruma alınabilir.");
-        }
-
-        if (lesson.StudentSubject.Student.IsArchived)
-        {
-            return Fail($"'{lesson.StudentSubject.Student.FullName}' adlı öğrenci arşivlenmiş durumda olduğundan iptal edilen ders yeniden aktifleştirilemez.");
-        }
-
-        if (lesson.StudentSubject.Subject.IsArchived)
-        {
-            return Fail($"'{lesson.StudentSubject.Subject.Name}' ders türü arşivlenmiş durumda olduğundan iptal edilen ders yeniden aktifleştirilemez.");
-        }
-
-        var conflictError = await CheckTeacherTimeConflictAsync(
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
             teacherId,
-            lesson.StartUtc,
-            lesson.EndUtc,
-            excludeLessonId: lesson.Id,
+            async ct =>
+            {
+                var lesson = await GetOwnedLessonAsync(teacherId, lessonId, ct);
+                if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+                {
+                    return Fail("Ders oturumu bulunamadı veya yetkiniz yok.");
+                }
+
+                if (lesson.Status != LessonStatus.Cancelled)
+                {
+                    return Fail("Yalnızca iptal edilmiş bir ders oturumu yeniden planlı duruma alınabilir.");
+                }
+
+                if (lesson.StudentSubject.Student.IsArchived)
+                {
+                    return Fail($"'{lesson.StudentSubject.Student.FullName}' adlı öğrenci arşivlenmiş durumda olduğundan iptal edilen ders yeniden aktifleştirilemez.");
+                }
+
+                if (lesson.StudentSubject.Subject.IsArchived)
+                {
+                    return Fail($"'{lesson.StudentSubject.Subject.Name}' ders türü arşivlenmiş durumda olduğundan iptal edilen ders yeniden aktifleştirilemez.");
+                }
+
+                var conflictError = await CheckTeacherTimeConflictAsync(
+                    teacherId,
+                    lesson.StartUtc,
+                    lesson.EndUtc,
+                    excludeLessonId: lesson.Id,
+                    ct);
+
+                if (conflictError is not null)
+                {
+                    return Fail(conflictError);
+                }
+
+                lesson.Status = LessonStatus.Scheduled;
+                await _dbContext.SaveChangesAsync(ct);
+
+                var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
+                    _timeZone);
+
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    $"{lesson.StudentSubject.Student.FullName} — '{lesson.StudentSubject.Subject.Name}' ({startLocal:dd.MM.yyyy HH:mm}) dersi yeniden planlı (Scheduled) duruma alındı.",
+                    Array.Empty<string>());
+            },
             cancellationToken);
-
-        if (conflictError is not null)
-        {
-            return Fail(conflictError);
-        }
-
-        lesson.Status = LessonStatus.Scheduled;
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
-            _timeZone);
-
-        return new ScheduleLessonOperationResult(
-            true,
-            lesson,
-            $"{lesson.StudentSubject.Student.FullName} — '{lesson.StudentSubject.Subject.Name}' ({startLocal:dd.MM.yyyy HH:mm}) dersi yeniden planlı (Scheduled) duruma alındı.",
-            Array.Empty<string>());
     }
 
     public async Task<RescheduleLessonViewModel?> GetLessonForRescheduleAsync(
@@ -665,58 +699,64 @@ public class ScheduleService : IScheduleService
             return Fail("Ders oturumu süresi 15 ile 360 dakika arasında olmalıdır.");
         }
 
-        var lesson = await GetOwnedLessonAsync(teacherId, model.LessonId, cancellationToken);
-        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
-        {
-            return Fail("Ertelenmek istenen ders oturumu bulunamadı veya yetkiniz yok.");
-        }
-
-        if (lesson.Status == LessonStatus.Completed)
-        {
-            return Fail("Tamamlanmış bir ders oturumu ertelenemez.");
-        }
-
-        var oldStartLocal = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
-            _timeZone);
-
-        var newStartLocal = model.NewDate.ToDateTime(model.NewStartTime, DateTimeKind.Unspecified);
-        var newStartUtc = TimeZoneInfo.ConvertTimeToUtc(newStartLocal, _timeZone);
-        var newEndUtc = newStartUtc.AddMinutes(model.NewDurationMinutes);
-
-        var conflictError = await CheckTeacherTimeConflictAsync(
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
             teacherId,
-            newStartUtc,
-            newEndUtc,
-            excludeLessonId: lesson.Id,
+            async ct =>
+            {
+                var lesson = await GetOwnedLessonAsync(teacherId, model.LessonId, ct);
+                if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+                {
+                    return Fail("Ertelenmek istenen ders oturumu bulunamadı veya yetkiniz yok.");
+                }
+
+                if (lesson.Status == LessonStatus.Completed)
+                {
+                    return Fail("Tamamlanmış bir ders oturumu ertelenemez.");
+                }
+
+                var oldStartLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
+                    _timeZone);
+
+                var newStartLocal = model.NewDate.ToDateTime(model.NewStartTime, DateTimeKind.Unspecified);
+                var newStartUtc = TimeZoneInfo.ConvertTimeToUtc(newStartLocal, _timeZone);
+                var newEndUtc = newStartUtc.AddMinutes(model.NewDurationMinutes);
+
+                var conflictError = await CheckTeacherTimeConflictAsync(
+                    teacherId,
+                    newStartUtc,
+                    newEndUtc,
+                    excludeLessonId: lesson.Id,
+                    ct);
+
+                if (conflictError is not null)
+                {
+                    return Fail(conflictError);
+                }
+
+                var trail = $"[Ertelendi: {oldStartLocal:dd.MM.yyyy HH:mm} → {newStartLocal:dd.MM.yyyy HH:mm}]";
+                if (!string.IsNullOrWhiteSpace(model.Reason))
+                {
+                    trail += $" {model.Reason.Trim()}";
+                }
+
+                lesson.StartUtc = newStartUtc;
+                lesson.EndUtc = newEndUtc;
+                lesson.DurationMinutes = model.NewDurationMinutes;
+                lesson.SessionFeeSnapshot = Lesson.CalculateSessionFee(lesson.HourlyRateSnapshot, model.NewDurationMinutes);
+                lesson.Status = LessonStatus.Rescheduled;
+                lesson.Notes = AppendNoteWithLimit(lesson.Notes, trail);
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                var newEndLocal = newStartLocal.AddMinutes(model.NewDurationMinutes);
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    $"{lesson.StudentSubject.Student.FullName} — '{lesson.StudentSubject.Subject.Name}' dersi {model.NewDate:dd.MM.yyyy} {newStartLocal:HH:mm}–{newEndLocal:HH:mm} tarihine ertelendi.",
+                    Array.Empty<string>());
+            },
             cancellationToken);
-
-        if (conflictError is not null)
-        {
-            return Fail(conflictError);
-        }
-
-        var trail = $"[Ertelendi: {oldStartLocal:dd.MM.yyyy HH:mm} → {newStartLocal:dd.MM.yyyy HH:mm}]";
-        if (!string.IsNullOrWhiteSpace(model.Reason))
-        {
-            trail += $" {model.Reason.Trim()}";
-        }
-
-        lesson.StartUtc = newStartUtc;
-        lesson.EndUtc = newEndUtc;
-        lesson.DurationMinutes = model.NewDurationMinutes;
-        lesson.SessionFeeSnapshot = Lesson.CalculateSessionFee(lesson.HourlyRateSnapshot, model.NewDurationMinutes);
-        lesson.Status = LessonStatus.Rescheduled;
-        lesson.Notes = AppendNoteWithLimit(lesson.Notes, trail);
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        var newEndLocal = newStartLocal.AddMinutes(model.NewDurationMinutes);
-        return new ScheduleLessonOperationResult(
-            true,
-            lesson,
-            $"{lesson.StudentSubject.Student.FullName} — '{lesson.StudentSubject.Subject.Name}' dersi {model.NewDate:dd.MM.yyyy} {newStartLocal:HH:mm}–{newEndLocal:HH:mm} tarihine ertelendi.",
-            Array.Empty<string>());
     }
 
     public async Task<ScheduleLessonOperationResult> DeleteLessonAsync(
@@ -729,28 +769,117 @@ public class ScheduleService : IScheduleService
             return Fail("Öğretmen kimliği doğrulanamadı.");
         }
 
-        var lesson = await GetOwnedLessonAsync(teacherId, lessonId, cancellationToken);
-        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
+            teacherId,
+            async ct =>
+            {
+                var lesson = await GetOwnedLessonAsync(teacherId, lessonId, ct);
+                if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+                {
+                    return Fail("Kaldırılmak istenen ders oturumu bulunamadı veya yetkiniz yok.");
+                }
+
+                if (lesson.Status == LessonStatus.Completed)
+                {
+                    return Fail("Tamamlanmış bir ders oturumu kaldırılamaz. Geçmiş ve finansal bütünlük için tamamlanan ders kayıtları korunur.");
+                }
+
+                var studentName = lesson.StudentSubject.Student.FullName;
+                var subjectName = lesson.StudentSubject.Subject.Name;
+
+                _dbContext.Lessons.Remove(lesson);
+                await _dbContext.SaveChangesAsync(ct);
+
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    $"{studentName} — '{subjectName}' planlı ders kaydı takvimden kaldırıldı.",
+                    Array.Empty<string>());
+            },
+            cancellationToken);
+    }
+
+    public async Task<bool> HasTimeConflictAsync(
+        string teacherId,
+        DateTime startUtc,
+        DateTime endUtc,
+        int? excludeLessonId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(teacherId) || endUtc <= startUtc)
         {
-            return Fail("Kaldırılmak istenen ders oturumu bulunamadı veya yetkiniz yok.");
+            return false;
         }
 
-        if (lesson.Status == LessonStatus.Completed)
+        var conflictError = await CheckTeacherTimeConflictAsync(
+            teacherId,
+            startUtc,
+            endUtc,
+            excludeLessonId,
+            cancellationToken);
+
+        return conflictError is not null;
+    }
+
+    /// <summary>
+    /// Aynı öğretmenin takvim yazma işlemlerini hem öğretmen bazlı asenkron kilit hem de
+    /// ilişkisel veritabanında Serializable transaction içinde atomik olarak yürütür (Faz 22, FR-043).
+    /// </summary>
+    private async Task<ScheduleLessonOperationResult> ExecuteTeacherAtomicScheduleWriteAsync(
+        string teacherId,
+        Func<CancellationToken, Task<ScheduleLessonOperationResult>> action,
+        CancellationToken cancellationToken)
+    {
+        var teacherLock = TeacherScheduleLocks.GetOrAdd(teacherId, static _ => new SemaphoreSlim(1, 1));
+        await teacherLock.WaitAsync(cancellationToken);
+
+        try
         {
-            return Fail("Tamamlanmış bir ders oturumu kaldırılamaz. Geçmiş ve finansal bütünlük için tamamlanan ders kayıtları korunur.");
+            var isRelational = _dbContext.Database.IsRelational();
+            await using var transaction = isRelational
+                ? await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+                : null;
+
+            try
+            {
+                var result = await action(cancellationToken);
+                if (transaction is not null)
+                {
+                    if (result.Succeeded)
+                    {
+                        await transaction.CommitAsync(cancellationToken);
+                    }
+                    else
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                    }
+                }
+
+                return result;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                }
+
+                return Fail("Bu ders kaydı başka bir oturumda eşzamanlı olarak güncellendi. Lütfen takvimi yenileyip tekrar deneyiniz.");
+            }
+            catch (DbUpdateException)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                }
+
+                return Fail("Takvim kaydı sırasında eşzamanlı bir işlem veya veri kısıtı çakışması oluştu. Lütfen tekrar deneyiniz.");
+            }
         }
-
-        var studentName = lesson.StudentSubject.Student.FullName;
-        var subjectName = lesson.StudentSubject.Subject.Name;
-
-        _dbContext.Lessons.Remove(lesson);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return new ScheduleLessonOperationResult(
-            true,
-            lesson,
-            $"{studentName} — '{subjectName}' planlı ders kaydı takvimden kaldırıldı.",
-            Array.Empty<string>());
+        finally
+        {
+            teacherLock.Release();
+        }
     }
 
     private async Task<Lesson?> GetOwnedLessonAsync(

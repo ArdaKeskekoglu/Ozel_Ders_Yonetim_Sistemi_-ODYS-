@@ -12,8 +12,8 @@ public sealed record ScheduleLessonOperationResult(
 /// <summary>
 /// Öğretmenin haftalık ders çizelgesini, hafta başlangıç/bitiş sınırlarını (Pazartesi–Pazar),
 /// önceki/sonraki hafta navigasyon verilerini, manuel ders ekleme, ders düzenleme/taşıma,
-/// iptal, erteleme ve uygun koşullarda ders kaldırma işlemlerini yürüten servis sözleşmesi
-/// (FR-008, FR-031..FR-045, FR-059).
+/// iptal, erteleme, çakışma/eşzamanlılık kontrolü ve uygun koşullarda ders kaldırma
+/// işlemlerini yürüten servis sözleşmesi (FR-008, FR-031..FR-045, FR-059).
 /// </summary>
 public interface IScheduleService
 {
@@ -71,5 +71,16 @@ public interface IScheduleService
     Task<ScheduleLessonOperationResult> DeleteLessonAsync(
         string teacherId,
         int lessonId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Belirtilen öğretmenin verilen [startUtc, endUtc) zaman aralığında (iptal edilenler ve varsa excludeLessonId hariç)
+    /// çakışan aktif bir dersi olup olmadığını kontrol eder (FR-043).
+    /// </summary>
+    Task<bool> HasTimeConflictAsync(
+        string teacherId,
+        DateTime startUtc,
+        DateTime endUtc,
+        int? excludeLessonId = null,
         CancellationToken cancellationToken = default);
 }
