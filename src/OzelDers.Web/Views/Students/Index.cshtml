@@ -9,7 +9,7 @@
             <span class="odys-status-pill odys-status-active mb-2">Öğrenci Yönetimi</span>
             <h1 class="h4 fw-bold mb-1">Öğrencilerim</h1>
             <p class="small text-muted mb-0">
-                Yalnızca kendi hesabınıza kayıtlı öğrencileri görüntüleyebilir, arayabilir ve durumlarına göre filtreleyebilirsiniz.
+                Yalnızca kendi hesabınıza kayıtlı öğrencileri görüntüleyebilir, aldığı ders türüne veya durumuna göre filtreleyebilir ve detay kartlarını inceleyebilirsiniz.
             </p>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
@@ -29,26 +29,39 @@
 
     <hr class="my-3" />
 
-    <!-- Arama ve Durum Filtresi -->
+    <!-- Arama, Ders Türü ve Durum Filtresi -->
     <form asp-controller="Students" asp-action="Index" method="get" class="row g-2 align-items-center">
-        <div class="col-12 col-md-6 col-lg-5">
+        <div class="col-12 col-md-4 col-lg-4">
             <label for="searchTerm" class="visually-hidden">Öğrenci Ara</label>
             <input type="search"
                    id="searchTerm"
                    name="searchTerm"
                    value="@Model.SearchTerm"
                    class="form-control"
-                   placeholder="Öğrenci adı veya soyadına göre ara..." />
+                   placeholder="Ad, soyad, telefon veya notlarda ara..." />
         </div>
 
         <div class="col-12 col-sm-6 col-md-3 col-lg-3">
+            <label for="subjectId" class="visually-hidden">Ders Türü Filtresi</label>
+            <select id="subjectId" name="subjectId" class="form-select">
+                <option value="">Tüm Ders Türleri</option>
+                @foreach (var subject in Model.AvailableSubjects)
+                {
+                    <option value="@subject.Id" selected="@(Model.SubjectId == subject.Id)">
+                        @subject.Name
+                    </option>
+                }
+            </select>
+        </div>
+
+        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
             <label for="status" class="visually-hidden">Durum Filtresi</label>
             <select id="status" name="status" class="form-select">
                 <option value="@StudentStatusFilter.Active" selected="@(Model.Status == StudentStatusFilter.Active)">
-                    Aktif Öğrenciler (@Model.ActiveCount)
+                    Aktif (@Model.ActiveCount)
                 </option>
                 <option value="@StudentStatusFilter.Archived" selected="@(Model.Status == StudentStatusFilter.Archived)">
-                    Arşivlenenler (@Model.ArchivedCount)
+                    Arşiv (@Model.ArchivedCount)
                 </option>
                 <option value="@StudentStatusFilter.All" selected="@(Model.Status == StudentStatusFilter.All)">
                     Tümü (@Model.TotalCount)
@@ -56,11 +69,11 @@
             </select>
         </div>
 
-        <div class="col-12 col-sm-6 col-md-3 col-lg-4 d-flex gap-2">
+        <div class="col-12 col-md-2 col-lg-3 d-flex gap-2">
             <button type="submit" class="btn btn-primary odys-touch-target px-4 fw-semibold">
                 Filtrele
             </button>
-            @if (!string.IsNullOrWhiteSpace(Model.SearchTerm) || Model.Status != StudentStatusFilter.Active)
+            @if (!string.IsNullOrWhiteSpace(Model.SearchTerm) || Model.Status != StudentStatusFilter.Active || Model.SubjectId.HasValue)
             {
                 <a class="btn btn-outline-secondary odys-touch-target px-3"
                    asp-controller="Students"
@@ -94,7 +107,7 @@ else if (!Model.HasFilteredResults)
     <section class="odys-card p-5 text-center" aria-label="Filtre Sonucu Bulunamadı">
         <h2 class="h5 fw-bold mb-2">Arama veya filtre kriterlerine uygun öğrenci bulunamadı</h2>
         <p class="text-muted small mb-3">
-            Farklı bir isimle arama yapabilir veya durum filtresini değiştirebilirsiniz.
+            Farklı bir isimle arama yapabilir veya ders türü/durum filtresini sıfırlayabilirsiniz.
         </p>
         <a class="btn btn-outline-primary odys-touch-target px-4 fw-semibold"
            asp-controller="Students"
@@ -112,8 +125,8 @@ else
                 <thead class="table-light">
                     <tr>
                         <th scope="col" class="ps-4">Ad Soyad</th>
+                        <th scope="col">Aldığı Ders Türleri</th>
                         <th scope="col">Telefon</th>
-                        <th scope="col">E-posta</th>
                         <th scope="col">Durum</th>
                         <th scope="col">Not Özeti</th>
                         <th scope="col" class="text-end pe-4">İşlemler</th>
@@ -123,9 +136,36 @@ else
                     @foreach (var student in Model.Students)
                     {
                         <tr>
-                            <td class="ps-4 fw-semibold">@student.FullName</td>
+                            <td class="ps-4">
+                                <a class="fw-semibold text-decoration-none"
+                                   asp-controller="Students"
+                                   asp-action="Details"
+                                   asp-route-id="@student.Id">
+                                    @student.FullName
+                                </a>
+                                @if (!string.IsNullOrWhiteSpace(student.Email))
+                                {
+                                    <div class="small text-muted">@student.Email</div>
+                                }
+                            </td>
+                            <td>
+                                @if (student.ActiveSubjects.Count == 0)
+                                {
+                                    <span class="text-muted small">Ders atanmadı</span>
+                                }
+                                else
+                                {
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach (var subj in student.ActiveSubjects)
+                                        {
+                                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill px-2 py-1">
+                                                @subj.SubjectName (@subj.WeeklyTargetCount×@subj.DefaultDurationMinutes dk • @subj.HourlyRate.ToString("N0") ₺)
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            </td>
                             <td>@(string.IsNullOrWhiteSpace(student.PhoneNumber) ? "—" : student.PhoneNumber)</td>
-                            <td>@(string.IsNullOrWhiteSpace(student.Email) ? "—" : student.Email)</td>
                             <td>
                                 @if (student.IsArchived)
                                 {
@@ -140,18 +180,26 @@ else
                                     </span>
                                 }
                             </td>
-                            <td class="text-muted small">
-                                @(string.IsNullOrWhiteSpace(student.Notes) ? "—" : student.Notes)
+                            <td class="text-muted small" style="max-width: 220px;">
+                                <span class="d-inline-block text-truncate" style="max-width: 220px;">
+                                    @(string.IsNullOrWhiteSpace(student.Notes) ? "—" : student.Notes)
+                                </span>
                             </td>
                             <td class="text-end pe-4">
                                 <div class="d-inline-flex align-items-center gap-2">
+                                    <a class="btn btn-outline-primary btn-sm odys-touch-target px-3"
+                                       asp-controller="Students"
+                                       asp-action="Details"
+                                       asp-route-id="@student.Id">
+                                        Detay
+                                    </a>
                                     <a class="btn btn-outline-dark btn-sm odys-touch-target px-3"
                                        asp-controller="StudentSubjects"
                                        asp-action="Index"
                                        asp-route-studentId="@student.Id">
                                         Dersler &amp; Ücretler
                                     </a>
-                                    <a class="btn btn-outline-primary btn-sm odys-touch-target px-3"
+                                    <a class="btn btn-outline-secondary btn-sm odys-touch-target px-3"
                                        asp-controller="Students"
                                        asp-action="Edit"
                                        asp-route-id="@student.Id">

@@ -3,12 +3,13 @@ using OzelDers.Web.Data;
 using OzelDers.Web.Domain.Entities;
 using OzelDers.Web.Services.Abstractions;
 using OzelDers.Web.ViewModels.Students;
+using OzelDers.Web.ViewModels.StudentSubjects;
 
 namespace OzelDers.Web.Services;
 
 /// <summary>
-/// Yalnızca oturumdaki öğretmenin kendi öğrencilerini listeleyen, arayan, ekleyen,
-/// güncelleyen ve arşiv durumunu yöneten servis (FR-007, FR-010..FR-021, DEC-13, NFR-007..NFR-009).
+/// Yalnızca oturumdaki öğretmenin kendi öğrencilerini listeleyen, arayan, detaylarını getiren,
+/// ekleyen, güncelleyen, özel notlarını ve arşiv durumunu yöneten servis (FR-007, FR-010..FR-021, DEC-13, NFR-007..NFR-009).
 /// </summary>
 public class StudentService : IStudentService
 {
@@ -23,6 +24,7 @@ public class StudentService : IStudentService
         string teacherId,
         string? searchTerm = null,
         StudentStatusFilter statusFilter = StudentStatusFilter.Active,
+        int? subjectId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(teacherId))
@@ -39,6 +41,18 @@ public class StudentService : IStudentService
         var activeCount = await teacherStudentsQuery.CountAsync(s => !s.IsArchived, cancellationToken);
         var archivedCount = await teacherStudentsQuery.CountAsync(s => s.IsArchived, cancellationToken);
 
+        var availableSubjects = await _dbContext.Subjects
+            .AsNoTracking()
+            .Where(s => s.TeacherId == teacherId && !s.IsArchived)
+            .OrderByDescending(s => s.IsDefault)
+            .ThenBy(s => s.Name)
+            .Select(s => new StudentSubjectFilterOptionViewModel
+            {
+                Id = s.Id,
+                Name = s.Name
+            })
+            .ToListAsync(cancellationToken);
+
         var filteredQuery = statusFilter switch
         {
             StudentStatusFilter.Active => teacherStudentsQuery.Where(s => !s.IsArchived),
@@ -46,13 +60,23 @@ public class StudentService : IStudentService
             _ => teacherStudentsQuery
         };
 
+        if (subjectId.HasValue && subjectId.Value > 0)
+        {
+            var targetSubjectId = subjectId.Value;
+            filteredQuery = filteredQuery.Where(s =>
+                s.StudentSubjects.Any(ss => ss.SubjectId == targetSubjectId && ss.IsActive));
+        }
+
         if (!string.IsNullOrWhiteSpace(normalizedSearch))
         {
             var termLower = normalizedSearch.ToLower();
             filteredQuery = filteredQuery.Where(s =>
                 s.FirstName.ToLower().Contains(termLower) ||
                 s.LastName.ToLower().Contains(termLower) ||
-                (s.FirstName + " " + s.LastName).ToLower().Contains(termLower));
+                (s.FirstName + " " + s.LastName).ToLower().Contains(termLower) ||
+                (s.PhoneNumber != null && s.PhoneNumber.ToLower().Contains(termLower)) ||
+                (s.Email != null && s.Email.ToLower().Contains(termLower)) ||
+                (s.Notes != null && s.Notes.ToLower().Contains(termLower)));
         }
 
         var students = await filteredQuery
@@ -68,7 +92,20 @@ public class StudentService : IStudentService
                 Email = s.Email,
                 IsArchived = s.IsArchived,
                 Notes = s.Notes,
-                CreatedAtUtc = s.CreatedAtUtc
+                CreatedAtUtc = s.CreatedAtUtc,
+                ActiveSubjects = s.StudentSubjects
+                    .Where(ss => ss.IsActive && ss.Subject != null)
+                    .OrderByDescending(ss => ss.Subject!.IsDefault)
+                    .ThenBy(ss => ss.Subject!.Name)
+                    .Select(ss => new StudentAssignedSubjectBadgeViewModel
+                    {
+                        SubjectId = ss.SubjectId,
+                        SubjectName = ss.Subject!.Name,
+                        HourlyRate = ss.HourlyRate,
+                        DefaultDurationMinutes = ss.DefaultDurationMinutes,
+                        WeeklyTargetCount = ss.WeeklyTargetCount
+                    })
+                    .ToList()
             })
             .ToListAsync(cancellationToken);
 
@@ -76,9 +113,81 @@ public class StudentService : IStudentService
         {
             SearchTerm = normalizedSearch,
             Status = statusFilter,
+            SubjectId = subjectId,
             ActiveCount = activeCount,
             ArchivedCount = archivedCount,
+            AvailableSubjects = availableSubjects,
             Students = students
+        };
+    }
+
+    public async Task<StudentDetailsViewModel?> GetStudentDetailsAsync(
+        string teacherId,
+        int studentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            throw new UnauthorizedAccessException("Öğrenci detaylarına erişmek için öğretmen oturumu gereklidir.");
+        }
+
+        var student = await _dbContext.Students
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == studentId && s.TeacherId == teacherId, cancellationToken);
+
+        if (student is null)
+        {
+            return null;
+        }
+
+        var defaultSubjectName = await _dbContext.Subjects
+            .AsNoTracking()
+            .Where(s => s.TeacherId == teacherId && !s.IsArchived && s.IsDefault)
+            .Select(s => s.Name)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var assignedSubjects = await _dbContext.StudentSubjects
+            .AsNoTracking()
+            .Include(ss => ss.Subject)
+            .Where(ss => ss.StudentId == studentId && ss.Student!.TeacherId == teacherId)
+            .OrderByDescending(ss => ss.IsActive)
+            .ThenByDescending(ss => ss.Subject != null && ss.Subject.IsDefault)
+            .ThenBy(ss => ss.Subject != null ? ss.Subject.Name : string.Empty)
+            .Select(ss => new StudentSubjectListItemViewModel
+            {
+                Id = ss.Id,
+                StudentId = ss.StudentId,
+                SubjectId = ss.SubjectId,
+                SubjectName = ss.Subject != null ? ss.Subject.Name : string.Empty,
+                IsTeacherDefaultSubject = ss.Subject != null && ss.Subject.IsDefault && !ss.Subject.IsArchived,
+                IsSubjectArchived = ss.Subject != null && ss.Subject.IsArchived,
+                HourlyRate = ss.HourlyRate,
+                DefaultDurationMinutes = ss.DefaultDurationMinutes,
+                WeeklyTargetCount = ss.WeeklyTargetCount,
+                IsActive = ss.IsActive
+            })
+            .ToListAsync(cancellationToken);
+
+        var activeItems = assignedSubjects.Where(i => i.IsActive).ToList();
+
+        return new StudentDetailsViewModel
+        {
+            Id = student.Id,
+            FirstName = student.FirstName,
+            LastName = student.LastName,
+            PhoneNumber = student.PhoneNumber,
+            Email = student.Email,
+            IsArchived = student.IsArchived,
+            Notes = student.Notes,
+            CreatedAtUtc = student.CreatedAtUtc,
+            UpdatedAtUtc = student.UpdatedAtUtc,
+            TeacherDefaultSubjectName = defaultSubjectName,
+            ActiveSubjectCount = activeItems.Count,
+            InactiveSubjectCount = assignedSubjects.Count - activeItems.Count,
+            TotalWeeklySessions = activeItems.Sum(i => i.WeeklyTargetCount),
+            TotalWeeklyMinutes = activeItems.Sum(i => i.WeeklyTotalMinutes),
+            TotalEstimatedWeeklyFee = activeItems.Sum(i => i.EstimatedWeeklyFee),
+            AssignedSubjects = assignedSubjects
         };
     }
 
@@ -184,6 +293,43 @@ public class StudentService : IStudentService
         student.Email = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim();
         student.Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim();
 
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return new StudentOperationResult(true, student, Array.Empty<string>());
+    }
+
+    public async Task<StudentOperationResult> UpdateStudentNotesAsync(
+        string teacherId,
+        int studentId,
+        string? notes,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            throw new UnauthorizedAccessException("Öğrenci notlarını güncellemek için öğretmen oturumu gereklidir.");
+        }
+
+        var normalizedNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        if (normalizedNotes is not null && normalizedNotes.Length > 2000)
+        {
+            return new StudentOperationResult(
+                false,
+                null,
+                new[] { "Özel notlar en fazla 2000 karakter olabilir." });
+        }
+
+        var student = await _dbContext.Students
+            .FirstOrDefaultAsync(s => s.Id == studentId && s.TeacherId == teacherId, cancellationToken);
+
+        if (student is null)
+        {
+            return new StudentOperationResult(
+                false,
+                null,
+                new[] { "Öğrenci kaydı bulunamadı veya bu işlem için yetkiniz yok." });
+        }
+
+        student.Notes = normalizedNotes;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return new StudentOperationResult(true, student, Array.Empty<string>());

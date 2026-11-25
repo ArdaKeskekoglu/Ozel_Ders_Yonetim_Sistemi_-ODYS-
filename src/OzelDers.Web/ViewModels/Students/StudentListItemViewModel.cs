@@ -1,7 +1,19 @@
 namespace OzelDers.Web.ViewModels.Students;
 
 /// <summary>
-/// Öğrenci listesi satır/kart görünüm modeli (FR-013, FR-015).
+/// Öğrenci listesinde öğrencinin aldığı aktif ders türü özet etiketi.
+/// </summary>
+public class StudentAssignedSubjectBadgeViewModel
+{
+    public int SubjectId { get; init; }
+    public required string SubjectName { get; init; }
+    public decimal HourlyRate { get; init; }
+    public int DefaultDurationMinutes { get; init; }
+    public int WeeklyTargetCount { get; init; }
+}
+
+/// <summary>
+/// Öğrenci listesi satır/kart görünüm modeli (FR-013, FR-015, FR-018).
 /// </summary>
 public class StudentListItemViewModel
 {
@@ -14,4 +26,6 @@ public class StudentListItemViewModel
     public bool IsArchived { get; init; }
     public string? Notes { get; init; }
     public DateTime CreatedAtUtc { get; init; }
+    public IReadOnlyList<StudentAssignedSubjectBadgeViewModel> ActiveSubjects { get; init; } =
+        Array.Empty<StudentAssignedSubjectBadgeViewModel>();
 }

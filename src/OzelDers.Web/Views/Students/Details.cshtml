@@ -1,0 +1,333 @@
+@model StudentDetailsViewModel
+@{
+    ViewData["Title"] = $"{Model.FullName} — Öğrenci Detayı";
+}
+
+<!-- Üst Başlık ve Hızlı Aksiyonlar -->
+<section class="odys-card p-4 mb-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
+        <div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <span class="odys-status-pill odys-status-active">Öğrenci Detay Kartı</span>
+                @if (Model.IsArchived)
+                {
+                    <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill px-3 py-1">
+                        Arşivlenmiş Öğrenci
+                    </span>
+                }
+                else
+                {
+                    <span class="odys-status-pill odys-status-active">
+                        Aktif Öğrenci
+                    </span>
+                }
+            </div>
+            <h1 class="h4 fw-bold mb-1">@Model.FullName</h1>
+            <p class="small text-muted mb-0">
+                İletişim bilgilerini, aldığınız özel öğretmen notlarını, atanmış ders türlerini ve haftalık ders/ücret hedeflerini bu ekrandan yönetebilirsiniz.
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <a class="btn btn-outline-secondary odys-touch-target px-3"
+               asp-controller="Students"
+               asp-action="Index">
+                ← Öğrenci Listesi
+            </a>
+            <a class="btn btn-outline-primary odys-touch-target px-3"
+               asp-controller="Students"
+               asp-action="Edit"
+               asp-route-id="@Model.Id">
+                Bilgileri Düzenle
+            </a>
+            <a class="btn btn-primary odys-touch-target px-3 fw-semibold"
+               asp-controller="StudentSubjects"
+               asp-action="Assign"
+               asp-route-studentId="@Model.Id">
+                + Ders Türü Ata
+            </a>
+            @if (Model.IsArchived)
+            {
+                <form asp-controller="Students"
+                      asp-action="Unarchive"
+                      asp-route-id="@Model.Id"
+                      method="post"
+                      class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-outline-success odys-touch-target px-3">
+                        Yeniden Aktif Et
+                    </button>
+                </form>
+            }
+            else
+            {
+                <form asp-controller="Students"
+                      asp-action="Archive"
+                      asp-route-id="@Model.Id"
+                      method="post"
+                      class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-outline-secondary odys-touch-target px-3">
+                        Arşivle
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+
+    <hr class="my-3" />
+
+    <!-- Haftalık Ders ve Ücret Özet Metrikleri -->
+    <div class="row g-3">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Atanmış Aktif Ders Türü</div>
+                <div class="h5 fw-bold mb-0">@Model.ActiveSubjectCount Ders</div>
+                @if (Model.InactiveSubjectCount > 0)
+                {
+                    <div class="small text-muted mt-1">+@Model.InactiveSubjectCount pasif ders kaydı</div>
+                }
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Haftalık Hedef Oturum</div>
+                <div class="h5 fw-bold mb-0">@Model.TotalWeeklySessions Oturum / Hafta</div>
+                <div class="small text-muted mt-1">Her oturum tek bir ders türüne aittir</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Haftalık Toplam Süre</div>
+                <div class="h5 fw-bold mb-0">@Model.TotalWeeklyMinutes Dakika</div>
+                <div class="small text-muted mt-1">(@Math.Round(Model.TotalWeeklyMinutes / 60.0, 1) saat / hafta)</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="p-3 rounded-3 bg-light border h-100">
+                <div class="small text-muted">Haftalık Tahmini Ders Tutarı</div>
+                <div class="h5 fw-bold text-primary mb-0">@Model.TotalEstimatedWeeklyFee.ToString("N2") ₺</div>
+                <div class="small text-muted mt-1">Aktif ders hedeflerine göre</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- İletişim Bilgileri ve Öğretmen Özel Notları -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-lg-5">
+        <section class="odys-card p-4 h-100" aria-label="Öğrenci İletişim ve Kayıt Bilgileri">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h5 fw-bold mb-0">İletişim &amp; Kayıt Bilgileri</h2>
+                <a class="btn btn-outline-primary btn-sm odys-touch-target px-3"
+                   asp-controller="Students"
+                   asp-action="Edit"
+                   asp-route-id="@Model.Id">
+                    Düzenle
+                </a>
+            </div>
+
+            <dl class="row mb-0 small">
+                <dt class="col-sm-4 text-muted py-2 border-bottom">Ad Soyad</dt>
+                <dd class="col-sm-8 fw-semibold py-2 border-bottom mb-0">@Model.FullName</dd>
+
+                <dt class="col-sm-4 text-muted py-2 border-bottom">Telefon</dt>
+                <dd class="col-sm-8 py-2 border-bottom mb-0">
+                    @(string.IsNullOrWhiteSpace(Model.PhoneNumber) ? "Belirtilmedi" : Model.PhoneNumber)
+                </dd>
+
+                <dt class="col-sm-4 text-muted py-2 border-bottom">E-posta</dt>
+                <dd class="col-sm-8 py-2 border-bottom mb-0">
+                    @(string.IsNullOrWhiteSpace(Model.Email) ? "Belirtilmedi" : Model.Email)
+                </dd>
+
+                <dt class="col-sm-4 text-muted py-2 border-bottom">Kayıt Durumu</dt>
+                <dd class="col-sm-8 py-2 border-bottom mb-0">
+                    @(Model.IsArchived ? "Arşivlenmiş" : "Aktif")
+                </dd>
+
+                <dt class="col-sm-4 text-muted pt-2">Kayıt Tarihi</dt>
+                <dd class="col-sm-8 pt-2 mb-0">
+                    @Model.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                    @if (Model.UpdatedAtUtc.HasValue)
+                    {
+                        <span class="text-muted d-block">
+                            Son güncelleme: @Model.UpdatedAtUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </span>
+                    }
+                </dd>
+            </dl>
+        </section>
+    </div>
+
+    <div class="col-12 col-lg-7">
+        <section class="odys-card p-4 h-100" aria-label="Öğretmen Özel Notları">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <h2 class="h5 fw-bold mb-0">Öğretmen Özel Notları</h2>
+                    <p class="small text-muted mb-0">
+                        Öğrencinin seviyesi, hedefi, veli iletişim tercihleri veya ders işleyişine dair özel notlarınız (yalnızca siz görebilirsiniz).
+                    </p>
+                </div>
+            </div>
+
+            <form asp-controller="Students"
+                  asp-action="UpdateNotes"
+                  asp-route-id="@Model.Id"
+                  method="post"
+                  class="mt-3">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="StudentId" value="@Model.Id" />
+
+                <div class="mb-3">
+                    <label for="Notes" class="visually-hidden">Öğretmen Özel Notları</label>
+                    <textarea id="Notes"
+                              name="Notes"
+                              rows="4"
+                              maxlength="2000"
+                              class="form-control"
+                              placeholder="Öğrenci hakkında özel not, seviye tespiti veya hatırlatma ekleyin...">@Model.Notes</textarea>
+                    <div class="form-text small">
+                        En fazla 2000 karakter. Notu temizlemek için alanı boş bırakıp kaydedebilirsiniz.
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary btn-sm odys-touch-target px-4 fw-semibold">
+                        Notları Kaydet
+                    </button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>
+
+<!-- Öğrencinin Aldığı Ders Türleri ve Ücretleri -->
+<section class="odys-card p-4 mb-4" aria-label="Öğrencinin Aldığı Ders Türleri ve Ücretleri">
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-3">
+        <div>
+            <h2 class="h5 fw-bold mb-1">Aldığı Ders Türleri, Saatlik Ücretler ve Haftalık Hedefler</h2>
+            <p class="small text-muted mb-0">
+                Öğrenciye birden fazla ders türü atanabilir; ancak her ders oturumu yalnızca tek bir ders türüne bağlanır.
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-outline-secondary btn-sm odys-touch-target px-3"
+               asp-controller="StudentSubjects"
+               asp-action="Index"
+               asp-route-studentId="@Model.Id">
+                Tüm Ders Ayarları
+            </a>
+            <a class="btn btn-primary btn-sm odys-touch-target px-3 fw-semibold"
+               asp-controller="StudentSubjects"
+               asp-action="Assign"
+               asp-route-studentId="@Model.Id">
+                + Yeni Ders Türü Ata
+            </a>
+        </div>
+    </div>
+
+    @if (!Model.HasAnySubjects)
+    {
+        <div class="p-4 text-center bg-light rounded-3 border">
+            <p class="fw-semibold mb-1">Bu öğrenciye henüz bir ders türü atanmamış.</p>
+            <p class="text-muted small mb-3">
+                Ders atama ekranında varsayılan dersiniz
+                @if (!string.IsNullOrWhiteSpace(Model.TeacherDefaultSubjectName))
+                {
+                    <strong>(@Model.TeacherDefaultSubjectName)</strong>
+                }
+                otomatik olarak seçili gelir.
+            </p>
+            <a class="btn btn-primary btn-sm odys-touch-target px-4 fw-semibold"
+               asp-controller="StudentSubjects"
+               asp-action="Assign"
+               asp-route-studentId="@Model.Id">
+                + İlk Ders Türünü Ata
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Ders Türü</th>
+                        <th scope="col">Saatlik Ücret</th>
+                        <th scope="col">Tek Oturum Süresi</th>
+                        <th scope="col">Haftalık Hedef</th>
+                        <th scope="col">Tek Oturum Ücreti</th>
+                        <th scope="col">Haftalık Tahmini Tutar</th>
+                        <th scope="col">Durum</th>
+                        <th scope="col" class="text-end">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.AssignedSubjects)
+                    {
+                        <tr>
+                            <td>
+                                <span class="fw-semibold">@item.SubjectName</span>
+                                @if (item.IsTeacherDefaultSubject)
+                                {
+                                    <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill small ms-1">
+                                        ★ Varsayılan
+                                    </span>
+                                }
+                            </td>
+                            <td class="fw-semibold">@item.HourlyRate.ToString("N2") ₺ / sa</td>
+                            <td>@item.DefaultDurationMinutes dk</td>
+                            <td>
+                                <span class="fw-semibold">@item.WeeklyTargetCount oturum</span>
+                                <span class="text-muted small">(@item.WeeklyTotalMinutes dk)</span>
+                            </td>
+                            <td>@item.EstimatedSessionFee.ToString("N2") ₺</td>
+                            <td class="fw-semibold text-primary">@item.EstimatedWeeklyFee.ToString("N2") ₺</td>
+                            <td>
+                                @if (item.IsActive)
+                                {
+                                    <span class="odys-status-pill odys-status-active">Aktif</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill px-2 py-1">
+                                        Pasif
+                                    </span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <a class="btn btn-outline-primary btn-sm odys-touch-target px-3"
+                                   asp-controller="StudentSubjects"
+                                   asp-action="Edit"
+                                   asp-route-id="@item.Id">
+                                    Düzenle
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<!-- Yaklaşan/Geçmiş Dersler ve Ödeme/Bakiye Özeti (Sonraki Fazlarla Entegre Bölmeler) -->
+<div class="row g-4">
+    <div class="col-12 col-lg-6">
+        <section class="odys-card p-4 h-100" aria-label="Yaklaşan ve Geçmiş Ders Oturumları">
+            <h2 class="h6 fw-bold mb-2">Geçmiş ve Yaklaşan Ders Oturumları</h2>
+            <p class="small text-muted mb-0">
+                Haftalık ders takvimi ve tek ders türlü oturum kayıtları (Faz 17–23) oluşturulduğunda öğrencinin geçmiş ve yaklaşan dersleri bu bölümde listelenecektir.
+            </p>
+        </section>
+    </div>
+    <div class="col-12 col-lg-6">
+        <section class="odys-card p-4 h-100" aria-label="Ödeme Geçmişi ve Bakiye Durumu">
+            <h2 class="h6 fw-bold mb-2">Ödeme Geçmişi ve Toplam Bakiye</h2>
+            <p class="small text-muted mb-0">
+                Yoklama, ders ücret tahakkuku ve tahsilat takibi (Faz 24–31) etkinleştirildiğinde öğrencinin ödeme hareketleri ve kalan borç/alacak bakiyesi bu bölümde görüntülenecektir.
+            </p>
+        </section>
+    </div>
+</div>

@@ -23,6 +23,7 @@ public class StudentsController : Controller
     public async Task<IActionResult> Index(
         string? searchTerm = null,
         StudentStatusFilter status = StudentStatusFilter.Active,
+        int? subjectId = null,
         CancellationToken cancellationToken = default)
     {
         var teacherId = _currentTeacherService.GetRequiredTeacherId();
@@ -30,9 +31,59 @@ public class StudentsController : Controller
             teacherId,
             searchTerm,
             status,
+            subjectId,
             cancellationToken);
 
         return View(viewModel);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Details(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var viewModel = await _studentService.GetStudentDetailsAsync(
+            teacherId,
+            id,
+            cancellationToken);
+
+        if (viewModel is null)
+        {
+            return NotFound();
+        }
+
+        return View(viewModel);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateNotes(
+        int id,
+        UpdateStudentNotesViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        if (!ModelState.IsValid)
+        {
+            TempData["ErrorMessage"] = "Özel notlar en fazla 2000 karakter olabilir.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _studentService.UpdateStudentNotesAsync(
+            teacherId,
+            id,
+            model.Notes,
+            cancellationToken);
+
+        if (!result.Succeeded || result.Student is null)
+        {
+            TempData["ErrorMessage"] = result.Errors.FirstOrDefault() ?? "Öğrenci notları güncellenemedi.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["SuccessMessage"] = $"{result.Student.FullName} için özel öğretmen notları kaydedildi.";
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpGet]
@@ -65,7 +116,7 @@ public class StudentsController : Controller
         }
 
         TempData["SuccessMessage"] = $"{result.Student.FullName} adlı öğrenci başarıyla eklendi.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Details), new { id = result.Student.Id });
     }
 
     [HttpGet]
@@ -107,7 +158,7 @@ public class StudentsController : Controller
         }
 
         TempData["SuccessMessage"] = $"{result.Student.FullName} adlı öğrencinin bilgileri güncellendi.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Details), new { id = result.Student.Id });
     }
 
     [HttpPost]
