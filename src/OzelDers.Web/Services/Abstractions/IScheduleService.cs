@@ -7,13 +7,15 @@ public sealed record ScheduleLessonOperationResult(
     bool Succeeded,
     Lesson? Lesson,
     string? InfoMessage,
-    IReadOnlyList<string> Errors);
+    IReadOnlyList<string> Errors,
+    int CreatedCount = 0);
 
 /// <summary>
 /// Öğretmenin haftalık ders çizelgesini, hafta başlangıç/bitiş sınırlarını (Pazartesi–Pazar),
-/// önceki/sonraki hafta navigasyon verilerini, manuel ders ekleme, ders düzenleme/taşıma,
-/// iptal, erteleme, çakışma/eşzamanlılık kontrolü ve uygun koşullarda ders kaldırma
-/// işlemlerini yürüten servis sözleşmesi (FR-008, FR-031..FR-045, FR-059).
+/// önceki/sonraki hafta navigasyon verilerini, manuel ve haftalık tekrarlayan ders ekleme,
+/// ders detayı, tek hafta istisnası düzenleme/taşıma, iptal, erteleme, çakışma/eşzamanlılık kontrolü
+/// ve uygun koşullarda ders kaldırma işlemlerini yürüten servis sözleşmesi
+/// (FR-008, FR-031..FR-047, FR-059).
 /// </summary>
 public interface IScheduleService
 {
@@ -22,6 +24,11 @@ public interface IScheduleService
     Task<WeeklyScheduleViewModel> GetWeeklyScheduleAsync(
         string teacherId,
         DateOnly? referenceDate = null,
+        CancellationToken cancellationToken = default);
+
+    Task<LessonDetailsViewModel?> GetLessonDetailsAsync(
+        string teacherId,
+        int lessonId,
         CancellationToken cancellationToken = default);
 
     Task<CreateLessonViewModel> PrepareCreateLessonViewModelAsync(
@@ -73,10 +80,6 @@ public interface IScheduleService
         int lessonId,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Belirtilen öğretmenin verilen [startUtc, endUtc) zaman aralığında (iptal edilenler ve varsa excludeLessonId hariç)
-    /// çakışan aktif bir dersi olup olmadığını kontrol eder (FR-043).
-    /// </summary>
     Task<bool> HasTimeConflictAsync(
         string teacherId,
         DateTime startUtc,

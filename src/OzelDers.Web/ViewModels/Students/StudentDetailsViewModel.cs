@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using OzelDers.Web.ViewModels.Schedule;
 using OzelDers.Web.ViewModels.StudentSubjects;
 
 namespace OzelDers.Web.ViewModels.Students;
@@ -18,7 +19,7 @@ public class UpdateStudentNotesViewModel
 /// <summary>
 /// Öğrenci detay sayfası görünüm modeli (FR-018..FR-021, FR-025..FR-029).
 /// Öğrencinin kimlik/iletişim bilgilerini, özel notlarını, aldığı ders türlerini,
-/// saatlik ücretlerini ve haftalık ders hedeflerini bir arada taşır.
+/// saatlik ücretlerini, haftalık ders hedeflerini ve yaklaşan/geçmiş ders oturumlarını bir arada taşır.
 /// </summary>
 public class StudentDetailsViewModel
 {
@@ -57,5 +58,13 @@ public class StudentDetailsViewModel
     public IReadOnlyList<StudentSubjectListItemViewModel> AssignedSubjects { get; init; } =
         Array.Empty<StudentSubjectListItemViewModel>();
 
+    public IReadOnlyList<ScheduleLessonCardViewModel> UpcomingLessons { get; init; } =
+        Array.Empty<ScheduleLessonCardViewModel>();
+
+    public IReadOnlyList<ScheduleLessonCardViewModel> PastLessons { get; init; } =
+        Array.Empty<ScheduleLessonCardViewModel>();
+
     public bool HasAnySubjects => AssignedSubjects.Count > 0;
+
+    public bool HasAnyLessons => UpcomingLessons.Count > 0 || PastLessons.Count > 0;
 }

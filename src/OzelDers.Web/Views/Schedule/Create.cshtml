@@ -8,10 +8,10 @@
         <div class="odys-card p-4">
             <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4 border-bottom pb-3">
                 <div>
-                    <span class="odys-status-pill odys-status-active mb-2">Manuel Ders Planlama</span>
+                    <span class="odys-status-pill odys-status-active mb-2">Manuel &amp; Haftalık Tekrarlayan Ders Planlama</span>
                     <h1 class="h4 fw-bold mb-1">Yeni Ders Oturumu Ekle</h1>
                     <p class="small text-muted mb-0">
-                        Her ders oturumu yalnızca tek bir öğrenciye ve o öğrenciye atanmış tek bir ders türüne bağlanır.
+                        Her ders oturumu yalnızca tek bir öğrenciye ve tek bir ders türüne bağlanır. Dilerseniz ardışık haftalar için tekrarlayan ders serisi üretebilirsiniz.
                     </p>
                 </div>
                 <a class="btn btn-outline-secondary btn-sm odys-touch-target px-3"
@@ -98,16 +98,31 @@
                                 <span class="input-group-text">dakika</span>
                             </div>
                             <span asp-validation-for="DurationMinutes" class="text-danger small"></span>
-                            <div class="form-text small">
-                                Seçilen dersin varsayılan oturum süresi otomatik doldurulur; bu oturum için değiştirebilirsiniz.
-                            </div>
                         </div>
 
                         <div class="col-12 col-sm-6">
+                            <label asp-for="RepeatWeeks" class="form-label fw-semibold"></label>
+                            <div class="input-group">
+                                <input asp-for="RepeatWeeks"
+                                       id="repeatWeeksInput"
+                                       type="number"
+                                       step="1"
+                                       min="1"
+                                       max="12"
+                                       class="form-control" />
+                                <span class="input-group-text">hafta</span>
+                            </div>
+                            <span asp-validation-for="RepeatWeeks" class="text-danger small"></span>
+                            <div class="form-text small">
+                                1 = tek ders; 2–12 = ardışık haftalarda aynı gün ve saatte tekrarlar (her hafta sonradan tek başına değiştirilebilir).
+                            </div>
+                        </div>
+
+                        <div class="col-12">
                             <label class="form-label fw-semibold">Oturum Ücreti Önizlemesi</label>
                             <div class="p-2 px-3 rounded-3 bg-light border d-flex flex-column justify-content-center" style="min-height: 38px;">
                                 <div id="feePreviewText" class="fw-bold text-primary">—</div>
-                                <div class="small text-muted">Kayıt anında snapshot olarak dondurulur</div>
+                                <div class="small text-muted">Kayıt anında her oturum için snapshot olarak dondurulur</div>
                             </div>
                         </div>
 
@@ -145,6 +160,7 @@
         (function () {
             const selectEl = document.getElementById('studentSubjectSelect');
             const durationEl = document.getElementById('durationMinutesInput');
+            const repeatEl = document.getElementById('repeatWeeksInput');
             const previewEl = document.getElementById('feePreviewText');
             if (!selectEl || !durationEl || !previewEl) return;
 
@@ -160,9 +176,17 @@
                 }
 
                 const currentDuration = parseInt(durationEl.value || '0', 10);
+                const repeatWeeks = Math.max(1, parseInt((repeatEl && repeatEl.value) || '1', 10));
+
                 if (hourlyRate > 0 && currentDuration > 0) {
                     const sessionFee = (hourlyRate * currentDuration / 60.0);
-                    previewEl.textContent = sessionFee.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+                    const formattedSession = sessionFee.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺ / oturum';
+                    if (repeatWeeks > 1) {
+                        const totalSeries = (sessionFee * repeatWeeks).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        previewEl.textContent = formattedSession + ' (' + repeatWeeks + ' hafta toplam: ' + totalSeries + ' ₺)';
+                    } else {
+                        previewEl.textContent = formattedSession;
+                    }
                 } else {
                     previewEl.textContent = '—';
                 }
@@ -174,6 +198,11 @@
             durationEl.addEventListener('input', function () {
                 updatePreview(false);
             });
+            if (repeatEl) {
+                repeatEl.addEventListener('input', function () {
+                    updatePreview(false);
+                });
+            }
 
             updatePreview(false);
         })();

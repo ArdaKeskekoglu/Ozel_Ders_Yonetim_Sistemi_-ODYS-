@@ -318,14 +318,70 @@
     }
 </section>
 
-<!-- Yaklaşan/Geçmiş Dersler ve Ödeme/Bakiye Özeti (Sonraki Fazlarla Entegre Bölmeler) -->
+<!-- Yaklaşan/Geçmiş Dersler ve Ödeme/Bakiye Özeti -->
 <div class="row g-4">
     <div class="col-12 col-lg-6">
         <section class="odys-card p-4 h-100" aria-label="Yaklaşan ve Geçmiş Ders Oturumları">
-            <h2 class="h6 fw-bold mb-2">Geçmiş ve Yaklaşan Ders Oturumları</h2>
-            <p class="small text-muted mb-0">
-                Haftalık ders takvimi ve tek ders türlü oturum kayıtları (Faz 17–23) oluşturulduğunda öğrencinin geçmiş ve yaklaşan dersleri bu bölümde listelenecektir.
-            </p>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h6 fw-bold mb-0">Geçmiş ve Yaklaşan Ders Oturumları</h2>
+                <a class="btn btn-outline-primary btn-sm odys-touch-target px-3"
+                   asp-controller="Schedule"
+                   asp-action="Create"
+                   asp-route-studentId="@Model.Id">
+                    + Ders Planla
+                </a>
+            </div>
+
+            @if (!Model.HasAnyLessons)
+            {
+                <p class="small text-muted mb-0">
+                    Bu öğrenci için henüz planlanmış veya geçmiş bir ders oturumu bulunmuyor.
+                </p>
+            }
+            else
+            {
+                @if (Model.UpcomingLessons.Count > 0)
+                {
+                    <div class="small fw-semibold text-primary mb-2">Yaklaşan Dersler</div>
+                    <div class="list-group list-group-flush mb-3 border rounded-3">
+                        @foreach (var lesson in Model.UpcomingLessons)
+                        {
+                            <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center small"
+                               asp-controller="Schedule"
+                               asp-action="Details"
+                               asp-route-id="@lesson.LessonId">
+                                <div>
+                                    <span class="fw-semibold">@lesson.StartLocal.ToString("dd.MM.yyyy") (@lesson.TimeRangeText)</span>
+                                    <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill ms-1">@lesson.SubjectName</span>
+                                </div>
+                                <span class="badge rounded-pill @lesson.StatusBadgeCssClass">@lesson.StatusBadgeText</span>
+                            </a>
+                        }
+                    </div>
+                }
+
+                @if (Model.PastLessons.Count > 0)
+                {
+                    <div class="small fw-semibold text-muted mb-2">Geçmiş ve İptal Edilen Dersler</div>
+                    <div class="list-group list-group-flush border rounded-3">
+                        @foreach (var lesson in Model.PastLessons)
+                        {
+                            <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center small"
+                               asp-controller="Schedule"
+                               asp-action="Details"
+                               asp-route-id="@lesson.LessonId">
+                                <div>
+                                    <span class="fw-semibold @(lesson.IsCancelled ? "text-decoration-line-through text-muted" : "")">
+                                        @lesson.StartLocal.ToString("dd.MM.yyyy") (@lesson.TimeRangeText)
+                                    </span>
+                                    <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill ms-1">@lesson.SubjectName</span>
+                                </div>
+                                <span class="badge rounded-pill @lesson.StatusBadgeCssClass">@lesson.StatusBadgeText</span>
+                            </a>
+                        }
+                    </div>
+                }
+            }
         </section>
     </div>
     <div class="col-12 col-lg-6">

@@ -12,19 +12,15 @@ namespace OzelDers.Web.Services;
 
 /// <summary>
 /// Öğretmenin haftalık ders çizelgesini (Pazartesi–Pazar), önceki/sonraki hafta navigasyonunu,
-/// ders kartlarını, manuel ders oturumu oluşturma, düzenleme, iptal, erteleme, kaldırma
-/// ve eşzamanlılık/çakışma korumasını yürüten servis (FR-008, FR-030..FR-045, FR-059, NFR-007).
+/// ders detayı görünümünü, manuel ve haftalık tekrarlayan ders oturumu oluşturma,
+/// tek hafta istisnası düzenleme, iptal, erteleme, kaldırma ve eşzamanlılık/çakışma korumasını
+/// yürüten servis (FR-008, FR-030..FR-047, FR-059, NFR-007).
 /// </summary>
 public class ScheduleService : IScheduleService
 {
     private static readonly CultureInfo TrCulture = CultureInfo.GetCultureInfo("tr-TR");
     private static readonly TimeZoneInfo DefaultTurkeyTimeZone = ResolveTurkeyTimeZone();
 
-    /// <summary>
-    /// Aynı öğretmenin takvim yazma işlemlerinde eşzamanlı yarış durumlarını (TOCTOU race condition)
-    /// uygulama katmanında seri hâle getiren öğretmen bazlı kilit tablosu.
-    /// İlişkisel veritabanında buna ek olarak Serializable transaction katmanı da çalıştırılır.
-    /// </summary>
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> TeacherScheduleLocks =
         new(StringComparer.Ordinal);
 
@@ -41,7 +37,6 @@ public class ScheduleService : IScheduleService
 
     public DateOnly GetMondayOfWeek(DateOnly referenceDate)
     {
-        // Pazartesi = 0, Salı = 1, ..., Pazar = 6 ofseti (ISO 8601)
         var offset = ((int)referenceDate.DayOfWeek + 6) % 7;
         return referenceDate.AddDays(-offset);
     }
@@ -90,36 +85,7 @@ public class ScheduleService : IScheduleService
             .ToListAsync(cancellationToken);
 
         var lessonCards = rawLessons
-            .Select(l =>
-            {
-                var startUtc = DateTime.SpecifyKind(l.StartUtc, DateTimeKind.Utc);
-                var endUtc = DateTime.SpecifyKind(l.EndUtc, DateTimeKind.Utc);
-                var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
-                var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endUtc, _timeZone);
-                var isPendingAttendance =
-                    (l.Status == LessonStatus.Scheduled || l.Status == LessonStatus.Rescheduled) &&
-                    endUtc <= utcNow;
-
-                return new ScheduleLessonCardViewModel
-                {
-                    LessonId = l.Id,
-                    StudentSubjectId = l.StudentSubjectId,
-                    StudentId = l.StudentSubject!.StudentId,
-                    StudentFullName = l.StudentSubject.Student!.FullName,
-                    SubjectId = l.StudentSubject.SubjectId,
-                    SubjectName = l.StudentSubject.Subject!.Name,
-                    StartUtc = startUtc,
-                    EndUtc = endUtc,
-                    StartLocal = startLocal,
-                    EndLocal = endLocal,
-                    DurationMinutes = l.DurationMinutes,
-                    HourlyRateSnapshot = l.HourlyRateSnapshot,
-                    SessionFeeSnapshot = l.SessionFeeSnapshot,
-                    Status = l.Status,
-                    Notes = l.Notes,
-                    IsPendingAttendanceVerification = isPendingAttendance
-                };
-            })
+            .Select(l => MapToLessonCard(l, utcNow))
             .ToList();
 
         var lessonsByDate = lessonCards
@@ -169,6 +135,98 @@ public class ScheduleService : IScheduleService
         };
     }
 
+    public async Task<LessonDetailsViewModel?> GetLessonDetailsAsync(
+        string teacherId,
+        int lessonId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            throw new UnauthorizedAccessException("Ders detaylarını görüntülemek için öğretmen oturumu gereklidir.");
+        }
+
+        var lesson = await _dbContext.Lessons
+            .AsNoTracking()
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Student)
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .FirstOrDefaultAsync(
+                l => l.Id == lessonId &&
+                     l.StudentSubject != null &&
+                     l.StudentSubject.Student != null &&
+                     l.StudentSubject.Student.TeacherId == teacherId &&
+                     l.StudentSubject.Subject != null &&
+                     l.StudentSubject.Subject.TeacherId == teacherId,
+                cancellationToken);
+
+        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+        {
+            return null;
+        }
+
+        var utcNow = DateTime.UtcNow;
+        var startUtc = DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc);
+        var endUtc = DateTime.SpecifyKind(lesson.EndUtc, DateTimeKind.Utc);
+        var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
+        var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endUtc, _timeZone);
+        var lessonDate = DateOnly.FromDateTime(startLocal);
+
+        var relatedRawLessons = await _dbContext.Lessons
+            .AsNoTracking()
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Student)
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .Where(l =>
+                l.StudentSubjectId == lesson.StudentSubjectId &&
+                l.Id != lesson.Id &&
+                l.StudentSubject != null &&
+                l.StudentSubject.Student != null &&
+                l.StudentSubject.Student.TeacherId == teacherId)
+            .OrderBy(l => l.StartUtc)
+            .Take(12)
+            .ToListAsync(cancellationToken);
+
+        var relatedCards = relatedRawLessons
+            .Select(l => MapToLessonCard(l, utcNow))
+            .ToList();
+
+        var isPendingAttendance =
+            (lesson.Status == LessonStatus.Scheduled || lesson.Status == LessonStatus.Rescheduled) &&
+            endUtc <= utcNow;
+
+        return new LessonDetailsViewModel
+        {
+            LessonId = lesson.Id,
+            StudentSubjectId = lesson.StudentSubjectId,
+            StudentId = lesson.StudentSubject.StudentId,
+            StudentFullName = lesson.StudentSubject.Student.FullName,
+            StudentPhoneNumber = lesson.StudentSubject.Student.PhoneNumber,
+            StudentEmail = lesson.StudentSubject.Student.Email,
+            SubjectId = lesson.StudentSubject.SubjectId,
+            SubjectName = lesson.StudentSubject.Subject.Name,
+            IsTeacherDefaultSubject = lesson.StudentSubject.Subject.IsDefault && !lesson.StudentSubject.Subject.IsArchived,
+            LessonDate = lessonDate,
+            DayNameTr = GetTurkishDayName(lessonDate.DayOfWeek),
+            StartUtc = startUtc,
+            EndUtc = endUtc,
+            StartLocal = startLocal,
+            EndLocal = endLocal,
+            DurationMinutes = lesson.DurationMinutes,
+            HourlyRateSnapshot = lesson.HourlyRateSnapshot,
+            SessionFeeSnapshot = lesson.SessionFeeSnapshot,
+            CurrentStudentSubjectHourlyRate = lesson.StudentSubject.HourlyRate,
+            Status = lesson.Status,
+            IsPendingAttendanceVerification = isPendingAttendance,
+            Notes = lesson.Notes,
+            CreatedAtUtc = lesson.CreatedAtUtc,
+            UpdatedAtUtc = lesson.UpdatedAtUtc,
+            WeekStartDate = GetMondayOfWeek(lessonDate),
+            RelatedSeriesLessons = relatedCards
+        };
+    }
+
     public async Task<CreateLessonViewModel> PrepareCreateLessonViewModelAsync(
         string teacherId,
         DateOnly? date = null,
@@ -202,6 +260,7 @@ public class ScheduleService : IScheduleService
             LessonDate = date ?? todayLocal,
             StartTime = new TimeOnly(15, 0),
             DurationMinutes = selectedOption?.DefaultDurationMinutes ?? 60,
+            RepeatWeeks = 1,
             PreselectedStudentId = studentId,
             AvailableEnrollments = options
         };
@@ -222,6 +281,12 @@ public class ScheduleService : IScheduleService
         if (model.DurationMinutes < 15 || model.DurationMinutes > 360)
         {
             return Fail("Ders oturumu süresi 15 ile 360 dakika arasında olmalıdır.");
+        }
+
+        var repeatWeeks = model.RepeatWeeks == 0 ? 1 : model.RepeatWeeks;
+        if (repeatWeeks < 1 || repeatWeeks > 12)
+        {
+            return Fail("Haftalık tekrar sayısı 1 ile 12 hafta arasında olmalıdır.");
         }
 
         if (!string.IsNullOrWhiteSpace(model.Notes) && model.Notes.Trim().Length > 1000)
@@ -264,40 +329,57 @@ public class ScheduleService : IScheduleService
                     return Fail($"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' ders ataması pasif durumda olduğundan yeni ders oturumu eklenemez.");
                 }
 
-                var startLocal = model.LessonDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
-                var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
-                var endUtc = startUtc.AddMinutes(model.DurationMinutes);
+                var createdLessons = new List<Lesson>(repeatWeeks);
 
-                var conflictError = await CheckTeacherTimeConflictAsync(
-                    teacherId,
-                    startUtc,
-                    endUtc,
-                    excludeLessonId: null,
-                    ct);
-
-                if (conflictError is not null)
+                for (var weekOffset = 0; weekOffset < repeatWeeks; weekOffset++)
                 {
-                    return Fail(conflictError);
+                    var occurrenceDate = model.LessonDate.AddDays(weekOffset * 7);
+                    var startLocal = occurrenceDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
+                    var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
+                    var endUtc = startUtc.AddMinutes(model.DurationMinutes);
+
+                    var conflictError = await CheckTeacherTimeConflictAsync(
+                        teacherId,
+                        startUtc,
+                        endUtc,
+                        excludeLessonId: null,
+                        ct);
+
+                    if (conflictError is not null)
+                    {
+                        var message = repeatWeeks > 1
+                            ? $"{weekOffset + 1}. hafta ({occurrenceDate:dd.MM.yyyy}): {conflictError}"
+                            : conflictError;
+
+                        return Fail(message);
+                    }
+
+                    var lesson = Lesson.CreateFromStudentSubject(
+                        enrollment,
+                        startUtc,
+                        model.DurationMinutes,
+                        model.Notes);
+
+                    createdLessons.Add(lesson);
                 }
 
-                var lesson = Lesson.CreateFromStudentSubject(
-                    enrollment,
-                    startUtc,
-                    model.DurationMinutes,
-                    model.Notes);
-
-                _dbContext.Lessons.Add(lesson);
+                _dbContext.Lessons.AddRange(createdLessons);
                 await _dbContext.SaveChangesAsync(ct);
 
-                var endLocal = startLocal.AddMinutes(model.DurationMinutes);
-                var infoMessage =
-                    $"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' dersi ({model.LessonDate:dd.MM.yyyy} {startLocal:HH:mm}–{endLocal:HH:mm}, {lesson.SessionFeeSnapshot:N2} ₺) takvime eklendi.";
+                var firstLesson = createdLessons[0];
+                var firstStartLocal = model.LessonDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
+                var firstEndLocal = firstStartLocal.AddMinutes(model.DurationMinutes);
+
+                var infoMessage = repeatWeeks == 1
+                    ? $"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' dersi ({model.LessonDate:dd.MM.yyyy} {firstStartLocal:HH:mm}–{firstEndLocal:HH:mm}, {firstLesson.SessionFeeSnapshot:N2} ₺) takvime eklendi."
+                    : $"{enrollment.Student.FullName} — '{enrollment.Subject.Name}' dersi için {model.LessonDate:dd.MM.yyyy} tarihinden itibaren ardışık {repeatWeeks} haftalık ({firstStartLocal:HH:mm}–{firstEndLocal:HH:mm}) tekrarlayan ders serisi takvime eklendi.";
 
                 return new ScheduleLessonOperationResult(
                     true,
-                    lesson,
+                    firstLesson,
                     infoMessage,
-                    Array.Empty<string>());
+                    Array.Empty<string>(),
+                    createdLessons.Count);
             },
             cancellationToken);
     }
@@ -495,7 +577,8 @@ public class ScheduleService : IScheduleService
                     true,
                     lesson,
                     infoMessage,
-                    Array.Empty<string>());
+                    Array.Empty<string>(),
+                    1);
             },
             cancellationToken);
     }
@@ -821,10 +904,37 @@ public class ScheduleService : IScheduleService
         return conflictError is not null;
     }
 
-    /// <summary>
-    /// Aynı öğretmenin takvim yazma işlemlerini hem öğretmen bazlı asenkron kilit hem de
-    /// ilişkisel veritabanında Serializable transaction içinde atomik olarak yürütür (Faz 22, FR-043).
-    /// </summary>
+    private ScheduleLessonCardViewModel MapToLessonCard(Lesson l, DateTime utcNow)
+    {
+        var startUtc = DateTime.SpecifyKind(l.StartUtc, DateTimeKind.Utc);
+        var endUtc = DateTime.SpecifyKind(l.EndUtc, DateTimeKind.Utc);
+        var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
+        var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endUtc, _timeZone);
+        var isPendingAttendance =
+            (l.Status == LessonStatus.Scheduled || l.Status == LessonStatus.Rescheduled) &&
+            endUtc <= utcNow;
+
+        return new ScheduleLessonCardViewModel
+        {
+            LessonId = l.Id,
+            StudentSubjectId = l.StudentSubjectId,
+            StudentId = l.StudentSubject!.StudentId,
+            StudentFullName = l.StudentSubject.Student!.FullName,
+            SubjectId = l.StudentSubject.SubjectId,
+            SubjectName = l.StudentSubject.Subject!.Name,
+            StartUtc = startUtc,
+            EndUtc = endUtc,
+            StartLocal = startLocal,
+            EndLocal = endLocal,
+            DurationMinutes = l.DurationMinutes,
+            HourlyRateSnapshot = l.HourlyRateSnapshot,
+            SessionFeeSnapshot = l.SessionFeeSnapshot,
+            Status = l.Status,
+            Notes = l.Notes,
+            IsPendingAttendanceVerification = isPendingAttendance
+        };
+    }
+
     private async Task<ScheduleLessonOperationResult> ExecuteTeacherAtomicScheduleWriteAsync(
         string teacherId,
         Func<CancellationToken, Task<ScheduleLessonOperationResult>> action,

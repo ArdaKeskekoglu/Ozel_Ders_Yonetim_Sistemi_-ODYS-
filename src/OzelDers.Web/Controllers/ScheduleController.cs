@@ -34,6 +34,25 @@ public class ScheduleController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> Details(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var viewModel = await _scheduleService.GetLessonDetailsAsync(
+            teacherId,
+            id,
+            cancellationToken);
+
+        if (viewModel is null)
+        {
+            return NotFound();
+        }
+
+        return View(viewModel);
+    }
+
+    [HttpGet]
     public async Task<IActionResult> Create(
         DateOnly? date = null,
         int? studentId = null,

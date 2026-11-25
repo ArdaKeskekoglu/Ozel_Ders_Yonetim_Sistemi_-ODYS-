@@ -35,7 +35,7 @@ public class StudentSubjectOptionViewModel
 }
 
 /// <summary>
-/// Takvim üzerinden manuel ders oturumu ekleme form modeli (FR-035..FR-038, FR-043).
+/// Takvim üzerinden manuel veya haftalık tekrarlayan ders oturumu ekleme form modeli (FR-035..FR-038, FR-043, FR-046).
 /// </summary>
 public class CreateLessonViewModel
 {
@@ -45,7 +45,7 @@ public class CreateLessonViewModel
     public int StudentSubjectId { get; set; }
 
     [Required(ErrorMessage = "Ders tarihi zorunludur.")]
-    [Display(Name = "Ders Tarihi")]
+    [Display(Name = "Başlangıç Ders Tarihi")]
     public DateOnly LessonDate { get; set; }
 
     [Required(ErrorMessage = "Başlangıç saati zorunludur.")]
@@ -56,6 +56,15 @@ public class CreateLessonViewModel
     [Range(15, 360, ErrorMessage = "Ders oturumu süresi 15 ile 360 dakika arasında olmalıdır.")]
     [Display(Name = "Oturum Süresi (Dakika)")]
     public int DurationMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// Haftalık tekrar sayısı (FR-046): 1 = yalnızca seçili hafta, 2..12 = ardışık N hafta boyunca aynı gün/saatte üretilir.
+    /// Her hafta bağımsız bir Lesson kaydı olarak saklandığı için tek hafta istisnası (FR-047) doğal olarak desteklenir.
+    /// </summary>
+    [Required(ErrorMessage = "Haftalık tekrar sayısı zorunludur.")]
+    [Range(1, 12, ErrorMessage = "Haftalık tekrar sayısı 1 ile 12 hafta arasında olmalıdır.")]
+    [Display(Name = "Haftalık Tekrar (Hafta Sayısı)")]
+    public int RepeatWeeks { get; set; } = 1;
 
     [MaxLength(1000, ErrorMessage = "Ders notu en fazla 1000 karakter olabilir.")]
     [Display(Name = "Ders Oturumu Notu (İsteğe Bağlı)")]

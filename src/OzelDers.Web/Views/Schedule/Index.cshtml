@@ -167,9 +167,12 @@
                                 <article class="p-3 rounded-3 border shadow-sm @lesson.CardContainerCssClass"
                                          aria-label="@lesson.StudentFullName - @lesson.SubjectName (@lesson.TimeRangeText)">
                                     <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
-                                        <span class="fw-bold small @(lesson.IsCancelled ? "text-muted text-decoration-line-through" : "text-dark")">
+                                        <a class="fw-bold small text-decoration-none @(lesson.IsCancelled ? "text-muted text-decoration-line-through" : "text-dark")"
+                                           asp-controller="Schedule"
+                                           asp-action="Details"
+                                           asp-route-id="@lesson.LessonId">
                                             @lesson.TimeRangeText
-                                        </span>
+                                        </a>
                                         <span class="badge rounded-pill @lesson.StatusBadgeCssClass">
                                             @lesson.StatusBadgeText
                                         </span>
@@ -200,8 +203,14 @@
                                         </div>
                                     }
 
-                                    <!-- Kart İşlemleri: Düzenle, Ertele, İptal Et / Yeniden Aktif Et -->
+                                    <!-- Kart İşlemleri: Detay, Düzenle, Ertele, İptal Et / Yeniden Aktif Et -->
                                     <div class="mt-2 pt-2 border-top d-flex flex-wrap justify-content-end gap-1">
+                                        <a class="btn btn-outline-dark btn-sm py-0 px-2"
+                                           asp-controller="Schedule"
+                                           asp-action="Details"
+                                           asp-route-id="@lesson.LessonId">
+                                            Detay
+                                        </a>
                                         @if (lesson.IsCancelled)
                                         {
                                             <form asp-controller="Schedule"

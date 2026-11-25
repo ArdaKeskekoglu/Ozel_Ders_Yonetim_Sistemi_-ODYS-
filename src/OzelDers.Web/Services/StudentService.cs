@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using OzelDers.Web.Data;
 using OzelDers.Web.Domain.Entities;
+using OzelDers.Web.Domain.Enums;
 using OzelDers.Web.Services.Abstractions;
+using OzelDers.Web.ViewModels.Schedule;
 using OzelDers.Web.ViewModels.Students;
 using OzelDers.Web.ViewModels.StudentSubjects;
 
@@ -170,6 +172,60 @@ public class StudentService : IStudentService
 
         var activeItems = assignedSubjects.Where(i => i.IsActive).ToList();
 
+        var utcNow = DateTime.UtcNow;
+        var rawStudentLessons = await _dbContext.Lessons
+            .AsNoTracking()
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .Where(l =>
+                l.StudentSubject != null &&
+                l.StudentSubject.StudentId == studentId &&
+                l.StudentSubject.Student!.TeacherId == teacherId)
+            .OrderByDescending(l => l.StartUtc)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+
+        var studentLessonCards = rawStudentLessons
+            .Select(l =>
+            {
+                var startUtc = DateTime.SpecifyKind(l.StartUtc, DateTimeKind.Utc);
+                var endUtc = DateTime.SpecifyKind(l.EndUtc, DateTimeKind.Utc);
+                var isPending = (l.Status == LessonStatus.Scheduled || l.Status == LessonStatus.Rescheduled) && endUtc <= utcNow;
+
+                return new ScheduleLessonCardViewModel
+                {
+                    LessonId = l.Id,
+                    StudentSubjectId = l.StudentSubjectId,
+                    StudentId = student.Id,
+                    StudentFullName = student.FullName,
+                    SubjectId = l.StudentSubject!.SubjectId,
+                    SubjectName = l.StudentSubject.Subject != null ? l.StudentSubject.Subject.Name : string.Empty,
+                    StartUtc = startUtc,
+                    EndUtc = endUtc,
+                    StartLocal = startUtc.ToLocalTime(),
+                    EndLocal = endUtc.ToLocalTime(),
+                    DurationMinutes = l.DurationMinutes,
+                    HourlyRateSnapshot = l.HourlyRateSnapshot,
+                    SessionFeeSnapshot = l.SessionFeeSnapshot,
+                    Status = l.Status,
+                    Notes = l.Notes,
+                    IsPendingAttendanceVerification = isPending
+                };
+            })
+            .ToList();
+
+        var upcomingLessons = studentLessonCards
+            .Where(c => c.StartUtc >= utcNow && c.Status != LessonStatus.Cancelled)
+            .OrderBy(c => c.StartUtc)
+            .Take(6)
+            .ToList();
+
+        var pastLessons = studentLessonCards
+            .Where(c => c.StartUtc < utcNow || c.Status == LessonStatus.Cancelled)
+            .OrderByDescending(c => c.StartUtc)
+            .Take(8)
+            .ToList();
+
         return new StudentDetailsViewModel
         {
             Id = student.Id,
@@ -187,7 +243,9 @@ public class StudentService : IStudentService
             TotalWeeklySessions = activeItems.Sum(i => i.WeeklyTargetCount),
             TotalWeeklyMinutes = activeItems.Sum(i => i.WeeklyTotalMinutes),
             TotalEstimatedWeeklyFee = activeItems.Sum(i => i.EstimatedWeeklyFee),
-            AssignedSubjects = assignedSubjects
+            AssignedSubjects = assignedSubjects,
+            UpcomingLessons = upcomingLessons,
+            PastLessons = pastLessons
         };
     }
 
