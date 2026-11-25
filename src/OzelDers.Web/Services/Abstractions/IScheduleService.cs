@@ -11,8 +11,8 @@ public sealed record ScheduleLessonOperationResult(
 
 /// <summary>
 /// Öğretmenin haftalık ders çizelgesini, hafta başlangıç/bitiş sınırlarını (Pazartesi–Pazar),
-/// önceki/sonraki hafta navigasyon verilerini ve manuel ders ekleme işlemlerini yürüten servis sözleşmesi
-/// (FR-008, FR-031..FR-038, FR-043, FR-045).
+/// önceki/sonraki hafta navigasyon verilerini, manuel ders ekleme ve ders düzenleme/taşıma
+/// işlemlerini yürüten servis sözleşmesi (FR-008, FR-031..FR-040, FR-043, FR-045).
 /// </summary>
 public interface IScheduleService
 {
@@ -45,5 +45,22 @@ public interface IScheduleService
     Task<ScheduleLessonOperationResult> CreateLessonAsync(
         string teacherId,
         CreateLessonViewModel model,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mevcut bir ders oturumunu düzenlemek veya başka bir gün/saate taşımak için form modelini hazırlar.
+    /// </summary>
+    Task<EditLessonViewModel?> GetLessonForEditAsync(
+        string teacherId,
+        int lessonId,
+        EditLessonViewModel? existingModel = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mevcut ders oturumunun gün, saat, süre, öğrenci–ders türü ve not bilgilerini kendisi hariç çakışma kontrolüyle günceller.
+    /// </summary>
+    Task<ScheduleLessonOperationResult> UpdateLessonAsync(
+        string teacherId,
+        EditLessonViewModel model,
         CancellationToken cancellationToken = default);
 }

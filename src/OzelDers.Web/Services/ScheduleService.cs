@@ -10,8 +10,8 @@ namespace OzelDers.Web.Services;
 
 /// <summary>
 /// Öğretmenin haftalık ders çizelgesini (Pazartesi–Pazar), önceki/sonraki hafta navigasyonunu,
-/// ders kartlarını ve manuel ders oturumu oluşturma işlemlerini yürüten servis
-/// (FR-008, FR-030..FR-038, FR-043..FR-045, NFR-007).
+/// ders kartlarını, manuel ders oturumu oluşturma ve ders düzenleme/taşıma işlemlerini yürüten servis
+/// (FR-008, FR-030..FR-040, FR-043..FR-045, NFR-007).
 /// </summary>
 public class ScheduleService : IScheduleService
 {
@@ -170,35 +170,7 @@ public class ScheduleService : IScheduleService
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _timeZone);
         var todayLocal = DateOnly.FromDateTime(localNow);
 
-        var options = await _dbContext.StudentSubjects
-            .AsNoTracking()
-            .Include(ss => ss.Student)
-            .Include(ss => ss.Subject)
-            .Where(ss =>
-                ss.IsActive &&
-                ss.Student != null &&
-                ss.Student.TeacherId == teacherId &&
-                !ss.Student.IsArchived &&
-                ss.Subject != null &&
-                ss.Subject.TeacherId == teacherId &&
-                !ss.Subject.IsArchived)
-            .OrderBy(ss => ss.Student!.FirstName)
-            .ThenBy(ss => ss.Student!.LastName)
-            .ThenByDescending(ss => ss.Subject!.IsDefault)
-            .ThenBy(ss => ss.Subject!.Name)
-            .Select(ss => new StudentSubjectOptionViewModel
-            {
-                StudentSubjectId = ss.Id,
-                StudentId = ss.StudentId,
-                StudentFullName = ss.Student!.FirstName + " " + ss.Student.LastName,
-                SubjectId = ss.SubjectId,
-                SubjectName = ss.Subject!.Name,
-                IsTeacherDefaultSubject = ss.Subject.IsDefault,
-                HourlyRate = ss.HourlyRate,
-                DefaultDurationMinutes = ss.DefaultDurationMinutes,
-                WeeklyTargetCount = ss.WeeklyTargetCount
-            })
-            .ToListAsync(cancellationToken);
+        var options = await GetActiveEnrollmentOptionsForTeacherAsync(teacherId, cancellationToken);
 
         if (existingModel is not null)
         {
@@ -278,35 +250,16 @@ public class ScheduleService : IScheduleService
         var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
         var endUtc = startUtc.AddMinutes(model.DurationMinutes);
 
-        // FR-043: Aynı öğretmenin aynı zaman aralığındaki [StartUtc, EndUtc) aktif dersleriyle çakışma kontrolü (iptal edilenler hariç)
-        var conflictingLesson = await _dbContext.Lessons
-            .AsNoTracking()
-            .Include(l => l.StudentSubject)
-            .ThenInclude(ss => ss!.Student)
-            .Include(l => l.StudentSubject)
-            .ThenInclude(ss => ss!.Subject)
-            .FirstOrDefaultAsync(
-                l => l.Status != LessonStatus.Cancelled &&
-                     l.StartUtc < endUtc &&
-                     startUtc < l.EndUtc &&
-                     l.StudentSubject != null &&
-                     l.StudentSubject.Student != null &&
-                     l.StudentSubject.Student.TeacherId == teacherId,
-                cancellationToken);
+        var conflictError = await CheckTeacherTimeConflictAsync(
+            teacherId,
+            startUtc,
+            endUtc,
+            excludeLessonId: null,
+            cancellationToken);
 
-        if (conflictingLesson is not null)
+        if (conflictError is not null)
         {
-            var conflictStartLocal = TimeZoneInfo.ConvertTimeFromUtc(
-                DateTime.SpecifyKind(conflictingLesson.StartUtc, DateTimeKind.Utc),
-                _timeZone);
-            var conflictEndLocal = TimeZoneInfo.ConvertTimeFromUtc(
-                DateTime.SpecifyKind(conflictingLesson.EndUtc, DateTimeKind.Utc),
-                _timeZone);
-            var conflictStudent = conflictingLesson.StudentSubject?.Student?.FullName ?? "Öğrenci";
-            var conflictSubject = conflictingLesson.StudentSubject?.Subject?.Name ?? "Ders";
-
-            return Fail(
-                $"Seçilen saat aralığında ({conflictStartLocal:HH:mm}–{conflictEndLocal:HH:mm}) {conflictStudent} — {conflictSubject} dersi ile zaman çakışması bulunmaktadır.");
+            return Fail(conflictError);
         }
 
         var lesson = Lesson.CreateFromStudentSubject(
@@ -327,6 +280,288 @@ public class ScheduleService : IScheduleService
             lesson,
             infoMessage,
             Array.Empty<string>());
+    }
+
+    public async Task<EditLessonViewModel?> GetLessonForEditAsync(
+        string teacherId,
+        int lessonId,
+        EditLessonViewModel? existingModel = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            throw new UnauthorizedAccessException("Ders düzenlemek için öğretmen oturumu gereklidir.");
+        }
+
+        var lesson = await _dbContext.Lessons
+            .AsNoTracking()
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Student)
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .FirstOrDefaultAsync(
+                l => l.Id == lessonId &&
+                     l.StudentSubject != null &&
+                     l.StudentSubject.Student != null &&
+                     l.StudentSubject.Student.TeacherId == teacherId &&
+                     l.StudentSubject.Subject != null &&
+                     l.StudentSubject.Subject.TeacherId == teacherId,
+                cancellationToken);
+
+        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+        {
+            return null;
+        }
+
+        var options = await GetActiveEnrollmentOptionsForTeacherAsync(teacherId, cancellationToken);
+
+        // Eğer dersin mevcut StudentSubject kaydı sonradan pasife alınmışsa, açılır listede kaybolmaması için ekle
+        if (options.All(o => o.StudentSubjectId != lesson.StudentSubjectId))
+        {
+            options.Insert(
+                0,
+                new StudentSubjectOptionViewModel
+                {
+                    StudentSubjectId = lesson.StudentSubjectId,
+                    StudentId = lesson.StudentSubject.StudentId,
+                    StudentFullName = lesson.StudentSubject.Student.FullName,
+                    SubjectId = lesson.StudentSubject.SubjectId,
+                    SubjectName = lesson.StudentSubject.Subject.Name,
+                    IsTeacherDefaultSubject = lesson.StudentSubject.Subject.IsDefault,
+                    HourlyRate = lesson.HourlyRateSnapshot,
+                    DefaultDurationMinutes = lesson.DurationMinutes,
+                    WeeklyTargetCount = lesson.StudentSubject.WeeklyTargetCount
+                });
+        }
+
+        if (existingModel is not null)
+        {
+            existingModel.Id = lesson.Id;
+            existingModel.HourlyRateSnapshot = lesson.HourlyRateSnapshot;
+            existingModel.SessionFeeSnapshot = lesson.SessionFeeSnapshot;
+            existingModel.Status = lesson.Status;
+            existingModel.AvailableEnrollments = options;
+            return existingModel;
+        }
+
+        var startUtc = DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc);
+        var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
+
+        return new EditLessonViewModel
+        {
+            Id = lesson.Id,
+            StudentSubjectId = lesson.StudentSubjectId,
+            LessonDate = DateOnly.FromDateTime(startLocal),
+            StartTime = TimeOnly.FromDateTime(startLocal),
+            DurationMinutes = lesson.DurationMinutes,
+            Notes = lesson.Notes,
+            HourlyRateSnapshot = lesson.HourlyRateSnapshot,
+            SessionFeeSnapshot = lesson.SessionFeeSnapshot,
+            Status = lesson.Status,
+            AvailableEnrollments = options
+        };
+    }
+
+    public async Task<ScheduleLessonOperationResult> UpdateLessonAsync(
+        string teacherId,
+        EditLessonViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            return Fail("Öğretmen kimliği doğrulanamadı.");
+        }
+
+        if (model.DurationMinutes < 15 || model.DurationMinutes > 360)
+        {
+            return Fail("Ders oturumu süresi 15 ile 360 dakika arasında olmalıdır.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Notes) && model.Notes.Trim().Length > 1000)
+        {
+            return Fail("Ders notu en fazla 1000 karakter olabilir.");
+        }
+
+        var lesson = await _dbContext.Lessons
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Student)
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .FirstOrDefaultAsync(
+                l => l.Id == model.Id &&
+                     l.StudentSubject != null &&
+                     l.StudentSubject.Student != null &&
+                     l.StudentSubject.Student.TeacherId == teacherId &&
+                     l.StudentSubject.Subject != null &&
+                     l.StudentSubject.Subject.TeacherId == teacherId,
+                cancellationToken);
+
+        if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+        {
+            return Fail("Düzenlenmek istenen ders oturumu bulunamadı veya bu ders üzerinde yetkiniz yok.");
+        }
+
+        var targetEnrollment = lesson.StudentSubject;
+        var isSubjectChanged = model.StudentSubjectId != lesson.StudentSubjectId;
+
+        if (isSubjectChanged)
+        {
+            var newEnrollment = await _dbContext.StudentSubjects
+                .Include(ss => ss.Student)
+                .Include(ss => ss.Subject)
+                .FirstOrDefaultAsync(
+                    ss => ss.Id == model.StudentSubjectId &&
+                          ss.Student != null &&
+                          ss.Student.TeacherId == teacherId &&
+                          ss.Subject != null &&
+                          ss.Subject.TeacherId == teacherId,
+                    cancellationToken);
+
+            if (newEnrollment is null || newEnrollment.Student is null || newEnrollment.Subject is null)
+            {
+                return Fail("Seçilen yeni öğrenci ve ders türü eşleşmesi bulunamadı veya hesabınıza ait değil.");
+            }
+
+            if (newEnrollment.Student.IsArchived)
+            {
+                return Fail($"'{newEnrollment.Student.FullName}' adlı öğrenci arşivlenmiş durumda olduğundan derse atanamaz.");
+            }
+
+            if (newEnrollment.Subject.IsArchived)
+            {
+                return Fail($"'{newEnrollment.Subject.Name}' ders türü arşivlenmiş durumda olduğundan derse atanamaz.");
+            }
+
+            if (!newEnrollment.IsActive)
+            {
+                return Fail($"{newEnrollment.Student.FullName} — '{newEnrollment.Subject.Name}' ders ataması pasif durumda olduğundan seçilemez.");
+            }
+
+            targetEnrollment = newEnrollment;
+        }
+
+        var startLocal = model.LessonDate.ToDateTime(model.StartTime, DateTimeKind.Unspecified);
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _timeZone);
+        var endUtc = startUtc.AddMinutes(model.DurationMinutes);
+
+        // İptal edilmemiş bir ders taşınıyorsa veya süresi değişiyorsa, kendisi (lesson.Id) hariç çakışma kontrolü yapılır (FR-043)
+        if (lesson.Status != LessonStatus.Cancelled)
+        {
+            var conflictError = await CheckTeacherTimeConflictAsync(
+                teacherId,
+                startUtc,
+                endUtc,
+                excludeLessonId: lesson.Id,
+                cancellationToken);
+
+            if (conflictError is not null)
+            {
+                return Fail(conflictError);
+            }
+        }
+
+        if (isSubjectChanged)
+        {
+            lesson.StudentSubjectId = targetEnrollment.Id;
+            lesson.HourlyRateSnapshot = decimal.Round(targetEnrollment.HourlyRate, 2);
+        }
+
+        lesson.StartUtc = startUtc;
+        lesson.EndUtc = endUtc;
+        lesson.DurationMinutes = model.DurationMinutes;
+        lesson.SessionFeeSnapshot = Lesson.CalculateSessionFee(lesson.HourlyRateSnapshot, model.DurationMinutes);
+        lesson.Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim();
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var endLocal = startLocal.AddMinutes(model.DurationMinutes);
+        var studentName = targetEnrollment.Student?.FullName ?? "Öğrenci";
+        var subjectName = targetEnrollment.Subject?.Name ?? "Ders";
+        var infoMessage =
+            $"{studentName} — '{subjectName}' dersi ({model.LessonDate:dd.MM.yyyy} {startLocal:HH:mm}–{endLocal:HH:mm}, {lesson.SessionFeeSnapshot:N2} ₺) olarak güncellendi.";
+
+        return new ScheduleLessonOperationResult(
+            true,
+            lesson,
+            infoMessage,
+            Array.Empty<string>());
+    }
+
+    private async Task<List<StudentSubjectOptionViewModel>> GetActiveEnrollmentOptionsForTeacherAsync(
+        string teacherId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.StudentSubjects
+            .AsNoTracking()
+            .Include(ss => ss.Student)
+            .Include(ss => ss.Subject)
+            .Where(ss =>
+                ss.IsActive &&
+                ss.Student != null &&
+                ss.Student.TeacherId == teacherId &&
+                !ss.Student.IsArchived &&
+                ss.Subject != null &&
+                ss.Subject.TeacherId == teacherId &&
+                !ss.Subject.IsArchived)
+            .OrderBy(ss => ss.Student!.FirstName)
+            .ThenBy(ss => ss.Student!.LastName)
+            .ThenByDescending(ss => ss.Subject!.IsDefault)
+            .ThenBy(ss => ss.Subject!.Name)
+            .Select(ss => new StudentSubjectOptionViewModel
+            {
+                StudentSubjectId = ss.Id,
+                StudentId = ss.StudentId,
+                StudentFullName = ss.Student!.FirstName + " " + ss.Student.LastName,
+                SubjectId = ss.SubjectId,
+                SubjectName = ss.Subject!.Name,
+                IsTeacherDefaultSubject = ss.Subject.IsDefault,
+                HourlyRate = ss.HourlyRate,
+                DefaultDurationMinutes = ss.DefaultDurationMinutes,
+                WeeklyTargetCount = ss.WeeklyTargetCount
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    private async Task<string?> CheckTeacherTimeConflictAsync(
+        string teacherId,
+        DateTime startUtc,
+        DateTime endUtc,
+        int? excludeLessonId,
+        CancellationToken cancellationToken)
+    {
+        var conflictingLesson = await _dbContext.Lessons
+            .AsNoTracking()
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Student)
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .FirstOrDefaultAsync(
+                l => (!excludeLessonId.HasValue || l.Id != excludeLessonId.Value) &&
+                     l.Status != LessonStatus.Cancelled &&
+                     l.StartUtc < endUtc &&
+                     startUtc < l.EndUtc &&
+                     l.StudentSubject != null &&
+                     l.StudentSubject.Student != null &&
+                     l.StudentSubject.Student.TeacherId == teacherId,
+                cancellationToken);
+
+        if (conflictingLesson is null)
+        {
+            return null;
+        }
+
+        var conflictStartLocal = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(conflictingLesson.StartUtc, DateTimeKind.Utc),
+            _timeZone);
+        var conflictEndLocal = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(conflictingLesson.EndUtc, DateTimeKind.Utc),
+            _timeZone);
+        var conflictStudent = conflictingLesson.StudentSubject?.Student?.FullName ?? "Öğrenci";
+        var conflictSubject = conflictingLesson.StudentSubject?.Subject?.Name ?? "Ders";
+
+        return $"Seçilen saat aralığında ({conflictStartLocal:HH:mm}–{conflictEndLocal:HH:mm}) {conflictStudent} — {conflictSubject} dersi ile zaman çakışması bulunmaktadır.";
     }
 
     private static ScheduleLessonOperationResult Fail(string error) =>
