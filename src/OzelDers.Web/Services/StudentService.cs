@@ -190,7 +190,11 @@ public class StudentService : IStudentService
             {
                 var startUtc = DateTime.SpecifyKind(l.StartUtc, DateTimeKind.Utc);
                 var endUtc = DateTime.SpecifyKind(l.EndUtc, DateTimeKind.Utc);
-                var isPending = (l.Status == LessonStatus.Scheduled || l.Status == LessonStatus.Rescheduled) && endUtc <= utcNow;
+                var isPending =
+                    l.Status != LessonStatus.Cancelled &&
+                    l.Status != LessonStatus.Completed &&
+                    l.AttendanceStatus == LessonAttendanceStatus.Pending &&
+                    endUtc <= utcNow;
 
                 return new ScheduleLessonCardViewModel
                 {
@@ -208,6 +212,8 @@ public class StudentService : IStudentService
                     HourlyRateSnapshot = l.HourlyRateSnapshot,
                     SessionFeeSnapshot = l.SessionFeeSnapshot,
                     Status = l.Status,
+                    AttendanceStatus = l.AttendanceStatus,
+                    AttendanceVerifiedAtUtc = l.AttendanceVerifiedAtUtc,
                     Notes = l.Notes,
                     IsPendingAttendanceVerification = isPending
                 };

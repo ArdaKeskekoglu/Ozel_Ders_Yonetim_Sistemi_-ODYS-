@@ -57,6 +57,13 @@
                 </button>
             </form>
 
+            <a class="btn btn-outline-warning text-dark odys-touch-target px-3 fw-semibold"
+               asp-controller="Schedule"
+               asp-action="PendingAttendance"
+               asp-route-date="@Model.WeekStartDate.ToString("yyyy-MM-dd")">
+                Yoklama Bekleyenler (@Model.PendingVerificationCount)
+            </a>
+
             <a class="btn btn-primary odys-touch-target px-3 fw-semibold"
                asp-controller="Schedule"
                asp-action="Create"
@@ -103,12 +110,25 @@
             </div>
         </div>
         <div class="col-12 col-sm-6 col-lg-3">
-            <div class="p-3 rounded-3 bg-light border h-100">
-                <div class="small text-muted">Yoklama Doğrulaması Bekleyen</div>
-                <div class="h5 fw-bold @(Model.PendingVerificationCount > 0 ? "text-warning-emphasis" : "") mb-0">
-                    @Model.PendingVerificationCount Oturum
+            <div class="p-3 rounded-3 bg-light border h-100 d-flex flex-column justify-content-between">
+                <div>
+                    <div class="small text-muted">Yoklama Doğrulaması Bekleyen</div>
+                    <div class="h5 fw-bold @(Model.PendingVerificationCount > 0 ? "text-warning-emphasis" : "") mb-0">
+                        @Model.PendingVerificationCount Oturum
+                    </div>
+                    <div class="small text-muted mt-1">Saati geçen dersler otomatik tamamlanmaz</div>
                 </div>
-                <div class="small text-muted mt-1">Saati geçen dersler otomatik tamamlanmaz</div>
+                @if (Model.PendingVerificationCount > 0)
+                {
+                    <div class="mt-2">
+                        <a class="small fw-semibold text-decoration-none"
+                           asp-controller="Schedule"
+                           asp-action="PendingAttendance"
+                           asp-route-date="@Model.WeekStartDate.ToString("yyyy-MM-dd")">
+                            Toplu Yoklama Tamamla →
+                        </a>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -203,7 +223,39 @@
                                         </div>
                                     }
 
-                                    <!-- Kart İşlemleri: Detay, Düzenle, Ertele, İptal Et / Yeniden Aktif Et -->
+                                    <!-- Kart İşlemleri: Yoklama Hızlı Onay, Detay, Düzenle, Ertele, İptal Et / Yeniden Aktif Et -->
+                                    @if (lesson.IsPendingAttendanceVerification)
+                                    {
+                                        <div class="mt-2 pt-2 border-top d-flex flex-wrap align-items-center justify-content-between gap-1">
+                                            <span class="small fw-semibold text-warning-emphasis">Yoklama:</span>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <form asp-controller="Schedule"
+                                                      asp-action="RecordAttendance"
+                                                      method="post"
+                                                      class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="LessonId" value="@lesson.LessonId" />
+                                                    <input type="hidden" name="AttendanceStatus" value="@LessonAttendanceStatus.Attended" />
+                                                    <input type="hidden" name="ReturnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                                                    <button type="submit" class="btn btn-success btn-sm py-0 px-2" title="Öğrenci derse geldi (Tamamlandı)">
+                                                        ✓ Geldi
+                                                    </button>
+                                                </form>
+                                                <form asp-controller="Schedule"
+                                                      asp-action="RecordAttendance"
+                                                      method="post"
+                                                      class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="LessonId" value="@lesson.LessonId" />
+                                                    <input type="hidden" name="AttendanceStatus" value="@LessonAttendanceStatus.Absent" />
+                                                    <input type="hidden" name="ReturnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2" title="Öğrenci derse gelmedi">
+                                                        ✕ Gelmedi
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    }
                                     <div class="mt-2 pt-2 border-top d-flex flex-wrap justify-content-end gap-1">
                                         <a class="btn btn-outline-dark btn-sm py-0 px-2"
                                            asp-controller="Schedule"

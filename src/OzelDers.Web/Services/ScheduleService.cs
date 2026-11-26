@@ -193,7 +193,9 @@ public class ScheduleService : IScheduleService
             .ToList();
 
         var isPendingAttendance =
-            (lesson.Status == LessonStatus.Scheduled || lesson.Status == LessonStatus.Rescheduled) &&
+            lesson.Status != LessonStatus.Cancelled &&
+            lesson.Status != LessonStatus.Completed &&
+            lesson.AttendanceStatus == LessonAttendanceStatus.Pending &&
             endUtc <= utcNow;
 
         return new LessonDetailsViewModel
@@ -218,6 +220,8 @@ public class ScheduleService : IScheduleService
             SessionFeeSnapshot = lesson.SessionFeeSnapshot,
             CurrentStudentSubjectHourlyRate = lesson.StudentSubject.HourlyRate,
             Status = lesson.Status,
+            AttendanceStatus = lesson.AttendanceStatus,
+            AttendanceVerifiedAtUtc = lesson.AttendanceVerifiedAtUtc,
             IsPendingAttendanceVerification = isPendingAttendance,
             Notes = lesson.Notes,
             CreatedAtUtc = lesson.CreatedAtUtc,
@@ -619,6 +623,8 @@ public class ScheduleService : IScheduleService
                 }
 
                 lesson.Status = LessonStatus.Cancelled;
+                lesson.AttendanceStatus = LessonAttendanceStatus.NotApplicable;
+                lesson.AttendanceVerifiedAtUtc = DateTime.UtcNow;
 
                 if (!string.IsNullOrWhiteSpace(cancelReason))
                 {
@@ -689,6 +695,8 @@ public class ScheduleService : IScheduleService
                 }
 
                 lesson.Status = LessonStatus.Scheduled;
+                lesson.AttendanceStatus = LessonAttendanceStatus.Pending;
+                lesson.AttendanceVerifiedAtUtc = null;
                 await _dbContext.SaveChangesAsync(ct);
 
                 var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
@@ -828,6 +836,8 @@ public class ScheduleService : IScheduleService
                 lesson.DurationMinutes = model.NewDurationMinutes;
                 lesson.SessionFeeSnapshot = Lesson.CalculateSessionFee(lesson.HourlyRateSnapshot, model.NewDurationMinutes);
                 lesson.Status = LessonStatus.Rescheduled;
+                lesson.AttendanceStatus = LessonAttendanceStatus.Pending;
+                lesson.AttendanceVerifiedAtUtc = null;
                 lesson.Notes = AppendNoteWithLimit(lesson.Notes, trail);
 
                 await _dbContext.SaveChangesAsync(ct);
@@ -882,6 +892,312 @@ public class ScheduleService : IScheduleService
             cancellationToken);
     }
 
+    public async Task<ScheduleLessonOperationResult> RecordAttendanceAsync(
+        string teacherId,
+        RecordLessonAttendanceInputViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            return Fail("Öğretmen kimliği doğrulanamadı.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.AttendanceNote) && model.AttendanceNote.Trim().Length > 500)
+        {
+            return Fail("Yoklama notu en fazla 500 karakter olabilir.");
+        }
+
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
+            teacherId,
+            async ct =>
+            {
+                var lesson = await GetOwnedLessonAsync(teacherId, model.LessonId, ct);
+                if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+                {
+                    return Fail("Yoklaması kaydedilmek istenen ders oturumu bulunamadı veya bu ders üzerinde yetkiniz yok.");
+                }
+
+                var studentName = lesson.StudentSubject.Student.FullName;
+                var subjectName = lesson.StudentSubject.Subject.Name;
+                var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
+                    _timeZone);
+
+                var utcNow = DateTime.UtcNow;
+                string statusText;
+
+                switch (model.AttendanceStatus)
+                {
+                    case LessonAttendanceStatus.Attended:
+                        lesson.AttendanceStatus = LessonAttendanceStatus.Attended;
+                        lesson.Status = LessonStatus.Completed;
+                        lesson.AttendanceVerifiedAtUtc = utcNow;
+                        statusText = "Öğrenci Geldi (Ders Tamamlandı)";
+                        break;
+
+                    case LessonAttendanceStatus.Absent:
+                        lesson.AttendanceStatus = LessonAttendanceStatus.Absent;
+                        if (lesson.Status == LessonStatus.Completed || lesson.Status == LessonStatus.Cancelled)
+                        {
+                            lesson.Status = LessonStatus.Scheduled;
+                        }
+                        lesson.AttendanceVerifiedAtUtc = utcNow;
+                        statusText = "Öğrenci Gelmedi (Devamsızlık)";
+                        break;
+
+                    case LessonAttendanceStatus.NotApplicable:
+                        if (lesson.Status == LessonStatus.Completed && lesson.AttendanceStatus == LessonAttendanceStatus.Attended)
+                        {
+                            return Fail("Tamamlanmış bir ders oturumu yoklama üzerinden doğrudan iptal edilemez. Önce yoklama durumunu güncelleyiniz.");
+                        }
+
+                        lesson.AttendanceStatus = LessonAttendanceStatus.NotApplicable;
+                        lesson.Status = LessonStatus.Cancelled;
+                        lesson.AttendanceVerifiedAtUtc = utcNow;
+                        statusText = "Ders İptal Edildi";
+                        break;
+
+                    case LessonAttendanceStatus.Pending:
+                        lesson.AttendanceStatus = LessonAttendanceStatus.Pending;
+                        if (lesson.Status == LessonStatus.Completed || lesson.Status == LessonStatus.Cancelled)
+                        {
+                            lesson.Status = LessonStatus.Scheduled;
+                        }
+                        lesson.AttendanceVerifiedAtUtc = null;
+                        statusText = "Yoklama Bekliyor";
+                        break;
+
+                    default:
+                        return Fail("Geçersiz yoklama durumu seçildi.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(model.AttendanceNote))
+                {
+                    var noteTag = $"[Yoklama ({statusText}): {model.AttendanceNote.Trim()}]";
+                    lesson.Notes = AppendNoteWithLimit(lesson.Notes, noteTag);
+                }
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                var infoMessage =
+                    $"{studentName} — '{subjectName}' ({startLocal:dd.MM.yyyy HH:mm}) dersi için yoklama durumu '{statusText}' olarak kaydedildi.";
+
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    infoMessage,
+                    Array.Empty<string>(),
+                    1);
+            },
+            cancellationToken);
+    }
+
+    public async Task<PendingAttendanceListViewModel> GetPendingAttendanceLessonsAsync(
+        string teacherId,
+        DateOnly? weekReferenceDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            throw new UnauthorizedAccessException("Bekleyen yoklamaları görüntülemek için öğretmen oturumu gereklidir.");
+        }
+
+        var utcNow = DateTime.UtcNow;
+        DateOnly? filterWeekStart = null;
+        string? filterWeekTitle = null;
+        DateTime? weekStartUtc = null;
+        DateTime? nextWeekStartUtc = null;
+
+        if (weekReferenceDate.HasValue)
+        {
+            var monday = GetMondayOfWeek(weekReferenceDate.Value);
+            var sunday = monday.AddDays(6);
+            filterWeekStart = monday;
+            filterWeekTitle = FormatWeekRangeTitle(monday, sunday);
+
+            var weekStartLocal = monday.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+            var nextWeekStartLocal = monday.AddDays(7).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+            weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(weekStartLocal, _timeZone);
+            nextWeekStartUtc = TimeZoneInfo.ConvertTimeToUtc(nextWeekStartLocal, _timeZone);
+        }
+
+        var query = _dbContext.Lessons
+            .AsNoTracking()
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Student)
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .Where(l =>
+                l.EndUtc <= utcNow &&
+                l.Status != LessonStatus.Cancelled &&
+                l.Status != LessonStatus.Completed &&
+                l.AttendanceStatus == LessonAttendanceStatus.Pending &&
+                l.StudentSubject != null &&
+                l.StudentSubject.Student != null &&
+                l.StudentSubject.Student.TeacherId == teacherId &&
+                l.StudentSubject.Subject != null &&
+                l.StudentSubject.Subject.TeacherId == teacherId);
+
+        if (weekStartUtc.HasValue && nextWeekStartUtc.HasValue)
+        {
+            var startBound = weekStartUtc.Value;
+            var endBound = nextWeekStartUtc.Value;
+            query = query.Where(l => l.StartUtc >= startBound && l.StartUtc < endBound);
+        }
+
+        var rawLessons = await query
+            .OrderBy(l => l.StartUtc)
+            .ThenBy(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var items = rawLessons
+            .Select(l =>
+            {
+                var startUtc = DateTime.SpecifyKind(l.StartUtc, DateTimeKind.Utc);
+                var endUtc = DateTime.SpecifyKind(l.EndUtc, DateTimeKind.Utc);
+                var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
+                var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endUtc, _timeZone);
+                var lessonDate = DateOnly.FromDateTime(startLocal);
+
+                return new PendingAttendanceItemViewModel
+                {
+                    LessonId = l.Id,
+                    StudentSubjectId = l.StudentSubjectId,
+                    StudentId = l.StudentSubject!.StudentId,
+                    StudentFullName = l.StudentSubject.Student!.FullName,
+                    SubjectId = l.StudentSubject.SubjectId,
+                    SubjectName = l.StudentSubject.Subject!.Name,
+                    LessonDate = lessonDate,
+                    DayNameTr = GetTurkishDayName(lessonDate.DayOfWeek),
+                    StartUtc = startUtc,
+                    EndUtc = endUtc,
+                    StartLocal = startLocal,
+                    EndLocal = endLocal,
+                    DurationMinutes = l.DurationMinutes,
+                    HourlyRateSnapshot = l.HourlyRateSnapshot,
+                    SessionFeeSnapshot = l.SessionFeeSnapshot,
+                    Status = l.Status,
+                    AttendanceStatus = l.AttendanceStatus,
+                    Notes = l.Notes
+                };
+            })
+            .ToList();
+
+        return new PendingAttendanceListViewModel
+        {
+            FilterWeekStartDate = filterWeekStart,
+            FilterWeekRangeTitle = filterWeekTitle,
+            Items = items
+        };
+    }
+
+    public async Task<ScheduleLessonOperationResult> BatchRecordAttendanceAsync(
+        string teacherId,
+        BatchRecordAttendanceInputViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            return Fail("Öğretmen kimliği doğrulanamadı.");
+        }
+
+        var distinctIds = model.LessonIds?.Distinct().ToList() ?? new List<int>();
+        if (distinctIds.Count == 0)
+        {
+            return Fail("Toplu yoklama kaydetmek için en az bir ders oturumu seçmelisiniz.");
+        }
+
+        if (model.AttendanceStatus == LessonAttendanceStatus.Pending)
+        {
+            return Fail("Toplu yoklama işleminde geçerli bir sonuç durumu (Geldi, Gelmedi veya İptal) seçilmelidir.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.AttendanceNote) && model.AttendanceNote.Trim().Length > 500)
+        {
+            return Fail("Toplu yoklama notu en fazla 500 karakter olabilir.");
+        }
+
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
+            teacherId,
+            async ct =>
+            {
+                var lessons = await _dbContext.Lessons
+                    .Include(l => l.StudentSubject)
+                    .ThenInclude(ss => ss!.Student)
+                    .Include(l => l.StudentSubject)
+                    .ThenInclude(ss => ss!.Subject)
+                    .Where(l =>
+                        distinctIds.Contains(l.Id) &&
+                        l.StudentSubject != null &&
+                        l.StudentSubject.Student != null &&
+                        l.StudentSubject.Student.TeacherId == teacherId &&
+                        l.StudentSubject.Subject != null &&
+                        l.StudentSubject.Subject.TeacherId == teacherId)
+                    .ToListAsync(ct);
+
+                if (lessons.Count != distinctIds.Count)
+                {
+                    return Fail("Seçilen ders oturumlarından bazıları bulunamadı veya hesabınıza ait değil.");
+                }
+
+                var utcNow = DateTime.UtcNow;
+                string statusText = model.AttendanceStatus switch
+                {
+                    LessonAttendanceStatus.Attended => "Öğrenci Geldi (Ders Tamamlandı)",
+                    LessonAttendanceStatus.Absent => "Öğrenci Gelmedi (Devamsızlık)",
+                    LessonAttendanceStatus.NotApplicable => "Ders İptal Edildi",
+                    _ => "Yoklama Güncellendi"
+                };
+
+                foreach (var lesson in lessons)
+                {
+                    switch (model.AttendanceStatus)
+                    {
+                        case LessonAttendanceStatus.Attended:
+                            lesson.AttendanceStatus = LessonAttendanceStatus.Attended;
+                            lesson.Status = LessonStatus.Completed;
+                            lesson.AttendanceVerifiedAtUtc = utcNow;
+                            break;
+
+                        case LessonAttendanceStatus.Absent:
+                            lesson.AttendanceStatus = LessonAttendanceStatus.Absent;
+                            if (lesson.Status == LessonStatus.Completed || lesson.Status == LessonStatus.Cancelled)
+                            {
+                                lesson.Status = LessonStatus.Scheduled;
+                            }
+                            lesson.AttendanceVerifiedAtUtc = utcNow;
+                            break;
+
+                        case LessonAttendanceStatus.NotApplicable:
+                            lesson.AttendanceStatus = LessonAttendanceStatus.NotApplicable;
+                            lesson.Status = LessonStatus.Cancelled;
+                            lesson.AttendanceVerifiedAtUtc = utcNow;
+                            break;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(model.AttendanceNote))
+                    {
+                        var noteTag = $"[Toplu Yoklama ({statusText}): {model.AttendanceNote.Trim()}]";
+                        lesson.Notes = AppendNoteWithLimit(lesson.Notes, noteTag);
+                    }
+                }
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lessons[0],
+                    $"Seçilen {lessons.Count} ders oturumunun yoklaması '{statusText}' olarak topluca tamamlandı.",
+                    Array.Empty<string>(),
+                    lessons.Count);
+            },
+            cancellationToken);
+    }
+
     public async Task<bool> HasTimeConflictAsync(
         string teacherId,
         DateTime startUtc,
@@ -911,7 +1227,9 @@ public class ScheduleService : IScheduleService
         var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
         var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endUtc, _timeZone);
         var isPendingAttendance =
-            (l.Status == LessonStatus.Scheduled || l.Status == LessonStatus.Rescheduled) &&
+            l.Status != LessonStatus.Cancelled &&
+            l.Status != LessonStatus.Completed &&
+            l.AttendanceStatus == LessonAttendanceStatus.Pending &&
             endUtc <= utcNow;
 
         return new ScheduleLessonCardViewModel
@@ -930,6 +1248,8 @@ public class ScheduleService : IScheduleService
             HourlyRateSnapshot = l.HourlyRateSnapshot,
             SessionFeeSnapshot = l.SessionFeeSnapshot,
             Status = l.Status,
+            AttendanceStatus = l.AttendanceStatus,
+            AttendanceVerifiedAtUtc = l.AttendanceVerifiedAtUtc,
             Notes = l.Notes,
             IsPendingAttendanceVerification = isPendingAttendance
         };

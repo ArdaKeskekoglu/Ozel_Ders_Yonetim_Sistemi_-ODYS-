@@ -80,6 +80,21 @@ public interface IScheduleService
         int lessonId,
         CancellationToken cancellationToken = default);
 
+    Task<ScheduleLessonOperationResult> RecordAttendanceAsync(
+        string teacherId,
+        RecordLessonAttendanceInputViewModel model,
+        CancellationToken cancellationToken = default);
+
+    Task<PendingAttendanceListViewModel> GetPendingAttendanceLessonsAsync(
+        string teacherId,
+        DateOnly? weekReferenceDate = null,
+        CancellationToken cancellationToken = default);
+
+    Task<ScheduleLessonOperationResult> BatchRecordAttendanceAsync(
+        string teacherId,
+        BatchRecordAttendanceInputViewModel model,
+        CancellationToken cancellationToken = default);
+
     Task<bool> HasTimeConflictAsync(
         string teacherId,
         DateTime startUtc,

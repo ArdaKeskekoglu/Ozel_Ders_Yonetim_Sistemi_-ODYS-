@@ -35,6 +35,12 @@ public class LessonConfiguration : IEntityTypeConfiguration<Lesson>
             .IsRequired()
             .HasDefaultValue(LessonStatus.Scheduled);
 
+        builder.Property(l => l.AttendanceStatus)
+            .IsRequired()
+            .HasDefaultValue(LessonAttendanceStatus.Pending);
+
+        builder.Property(l => l.AttendanceVerifiedAtUtc);
+
         builder.Property(l => l.Notes)
             .HasMaxLength(1000);
 

@@ -325,4 +325,82 @@ public class ScheduleController : Controller
             nameof(Index),
             returnDate.HasValue ? new { date = returnDate.Value.ToString("yyyy-MM-dd") } : null);
     }
+
+    [HttpGet]
+    public async Task<IActionResult> PendingAttendance(
+        DateOnly? date = null,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var viewModel = await _scheduleService.GetPendingAttendanceLessonsAsync(
+            teacherId,
+            date,
+            cancellationToken);
+
+        return View(viewModel);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RecordAttendance(
+        RecordLessonAttendanceInputViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _scheduleService.RecordAttendanceAsync(
+            teacherId,
+            model,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            TempData["ErrorMessage"] = result.Errors.FirstOrDefault() ?? "Yoklama durumu kaydedilemedi.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = result.InfoMessage;
+        }
+
+        if (model.ReturnToPendingCenter)
+        {
+            return RedirectToAction(
+                nameof(PendingAttendance),
+                model.ReturnDate.HasValue ? new { date = model.ReturnDate.Value.ToString("yyyy-MM-dd") } : null);
+        }
+
+        if (model.ReturnToDetails)
+        {
+            return RedirectToAction(nameof(Details), new { id = model.LessonId });
+        }
+
+        return RedirectToAction(
+            nameof(Index),
+            model.ReturnDate.HasValue ? new { date = model.ReturnDate.Value.ToString("yyyy-MM-dd") } : null);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BatchRecordAttendance(
+        BatchRecordAttendanceInputViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _scheduleService.BatchRecordAttendanceAsync(
+            teacherId,
+            model,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            TempData["ErrorMessage"] = result.Errors.FirstOrDefault() ?? "Toplu yoklama kaydedilemedi.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = result.InfoMessage;
+        }
+
+        return RedirectToAction(
+            nameof(PendingAttendance),
+            model.FilterDate.HasValue ? new { date = model.FilterDate.Value.ToString("yyyy-MM-dd") } : null);
+    }
 }

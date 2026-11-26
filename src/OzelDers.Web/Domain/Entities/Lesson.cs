@@ -48,6 +48,17 @@ public class Lesson : BaseEntity
     public LessonStatus Status { get; set; } = LessonStatus.Scheduled;
 
     /// <summary>
+    /// Öğrencinin derse katılım / yoklama durumu (Pending, Attended, Absent, NotApplicable) (FR-057..FR-064, BR-01).
+    /// Saati geçen dersler otomatik Attended olmaz; öğretmen doğrulayana kadar Pending kalır.
+    /// </summary>
+    public LessonAttendanceStatus AttendanceStatus { get; set; } = LessonAttendanceStatus.Pending;
+
+    /// <summary>
+    /// Öğretmenin yoklama doğrulamasını kaydettiği zaman (UTC) (FR-061, FR-062).
+    /// </summary>
+    public DateTime? AttendanceVerifiedAtUtc { get; set; }
+
+    /// <summary>
     /// Ders oturumuna özel öğretmen notu veya konu özeti.
     /// </summary>
     public string? Notes { get; set; }
