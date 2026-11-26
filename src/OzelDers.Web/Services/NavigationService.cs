@@ -4,23 +4,21 @@ using OzelDers.Web.ViewModels.Navigation;
 namespace OzelDers.Web.Services;
 
 /// <summary>
-/// docs/04-ekranlar-ve-akislar.md belgesindeki bilgi mimarisini uygular:
-/// Sol Menü: Ana Sayfa · Öğrenciler · Ders Türleri · Ders Programı · Ders Geçmişi · Ödemeler · Raporlar
-/// Sağ Üst: Bildirim · Profil · Ayarlar
+/// Kullanılabilir sayfaları bağlantı, gelecekteki modülleri pasif öğe olarak gösterir.
+/// Ders türü yönetimine Profil üzerinden erişilir.
 /// </summary>
 public class NavigationService : INavigationService
 {
     public IReadOnlyList<NavigationItemViewModel> GetSidebarItems(string? currentController, string? currentAction)
     {
-        var items = new (string Key, string Title, string Controller, string Action, string IconText)[]
+        var items = new (string Key, string Title, string Controller, string Action, string IconText, string? BadgeText)[]
         {
-            ("dashboard", "Ana Sayfa", "Home", "Index", "⌂"),
-            ("students", "Öğrenciler", "Students", "Index", "👥"),
-            ("subjects", "Ders Türleri", "Subjects", "Index", "📘"),
-            ("schedule", "Ders Programı", "Schedule", "Index", "📅"),
-            ("lessons", "Ders Geçmişi", "Lessons", "Index", "🕘"),
-            ("payments", "Ödemeler", "Payments", "Index", "💳"),
-            ("reports", "Raporlar", "Reports", "Index", "📊")
+            ("dashboard", "Ana Sayfa", "Home", "Index", "⌂", null),
+            ("students", "Öğrenciler", "Students", "Index", "👥", null),
+            ("schedule", "Ders Programı", "Schedule", "Index", "📅", null),
+            ("lessons", "Ders Geçmişi", "Lessons", "Index", "◷", "Yakında"),
+            ("payments", "Ödemeler", "Payments", "Index", "▣", "Yakında"),
+            ("reports", "Raporlar", "Reports", "Index", "▥", "Yakında")
         };
 
         return items.Select(item => new NavigationItemViewModel
@@ -30,17 +28,18 @@ public class NavigationService : INavigationService
             Controller = item.Controller,
             Action = item.Action,
             IconText = item.IconText,
-            IsActive = IsRouteMatch(item.Controller, item.Action, currentController, currentAction)
+            BadgeText = item.BadgeText,
+            IsActive = item.BadgeText is null && IsRouteMatch(item.Controller, item.Action, currentController, currentAction)
         }).ToList();
     }
 
     public IReadOnlyList<NavigationItemViewModel> GetTopbarItems(string? currentController, string? currentAction)
     {
-        var items = new (string Key, string Title, string Controller, string Action, string IconText)[]
+        var items = new (string Key, string Title, string Controller, string Action, string IconText, string? BadgeText)[]
         {
-            ("notifications", "Bildirimler", "Notifications", "Index", "🔔"),
-            ("profile", "Profil", "Account", "Profile", "👤"),
-            ("settings", "Ayarlar", "Settings", "Index", "⚙️")
+            ("notifications", "Bildirimler", "Notifications", "Index", "♧", "Yakında"),
+            ("profile", "Profil", "Account", "Profile", "👤", null),
+            ("settings", "Ayarlar", "Settings", "Index", "⚙", "Yakında")
         };
 
         return items.Select(item => new NavigationItemViewModel
@@ -50,7 +49,8 @@ public class NavigationService : INavigationService
             Controller = item.Controller,
             Action = item.Action,
             IconText = item.IconText,
-            IsActive = IsRouteMatch(item.Controller, item.Action, currentController, currentAction)
+            BadgeText = item.BadgeText,
+            IsActive = item.BadgeText is null && IsRouteMatch(item.Controller, item.Action, currentController, currentAction)
         }).ToList();
     }
 
@@ -63,6 +63,18 @@ public class NavigationService : INavigationService
         if (string.IsNullOrWhiteSpace(currentController))
         {
             return false;
+        }
+
+        if (string.Equals(itemController, "Students", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(currentController, "StudentSubjects", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(itemController, "Account", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(currentController, "Subjects", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
         }
 
         if (!string.Equals(itemController, currentController, StringComparison.OrdinalIgnoreCase))

@@ -15,10 +15,13 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/OzelDers.Web.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/design-system.css" asp-append-version="true" />
 </head>
 <body class="odys-body">
+    <a class="odys-skip-link" href="#odysMainContent">İçeriğe geç</a>
     <div class="odys-shell">
-        <!-- Masaüstü Sol Menü (Sidebar) -->
+        @if (User.Identity?.IsAuthenticated == true)
+        {
         <aside class="odys-sidebar d-none d-lg-flex flex-column" aria-label="Ana Yan Menü">
             <div class="odys-sidebar-brand">
                 <a class="odys-brand-link" asp-area="" asp-controller="Home" asp-action="Index">
@@ -31,27 +34,36 @@
                     @foreach (var item in sidebarItems)
                     {
                         <li class="nav-item">
+                            @if (item.BadgeText is null)
+                            {
                             <a class="nav-link odys-nav-link @(item.IsActive ? "active" : "")"
                                asp-area=""
                                asp-controller="@item.Controller"
                                asp-action="@item.Action"
                                aria-current="@(item.IsActive ? "page" : null)">
-                                <span class="odys-nav-icon" aria-hidden="true">@item.IconText</span>
+                                <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", item.Key)</span>
                                 <span>@item.Title</span>
                             </a>
+                            }
+                            else
+                            {
+                            <span class="nav-link odys-nav-link odys-nav-link-disabled" aria-disabled="true">
+                                <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", item.Key)</span>
+                                <span>@item.Title</span>
+                                <span class="odys-coming-soon">@item.BadgeText</span>
+                            </span>
+                            }
                         </li>
                     }
                 </ul>
             </nav>
-            <div class="odys-sidebar-footer">
-                <span class="odys-status-pill odys-status-active">Sistem Hazır</span>
-            </div>
         </aside>
+        }
 
         <!-- Sağ Ana Alan (Üst Bar + İçerik + Alt Bilgi) -->
         <div class="odys-main-wrapper d-flex flex-column flex-grow-1">
             <header class="odys-topbar border-bottom bg-white">
-                <div class="container-fluid d-flex align-items-center justify-content-between py-2 px-3">
+                <div class="container-fluid odys-topbar-inner d-flex align-items-center justify-content-between gap-2 py-2 px-3 px-lg-4">
                     <div class="d-flex align-items-center gap-2">
                         <!-- Mobil Menü Açma Butonu -->
                         <button class="btn btn-outline-secondary d-lg-none odys-touch-target"
@@ -65,32 +77,39 @@
                         <a class="navbar-brand fw-bold d-lg-none mb-0" asp-area="" asp-controller="Home" asp-action="Index">
                             ÖDYS
                         </a>
-                        <span class="text-muted small d-none d-md-inline">
-                            @ViewData["Title"]
-                        </span>
                     </div>
 
-                    <!-- Sağ Üst Aksiyonlar: Bildirimler, Profil, Ayarlar ve Hesap -->
-                    <nav aria-label="Kullanıcı ve Ayarlar Menüsü">
+                    <nav class="d-none d-lg-block" aria-label="Kullanıcı Menüsü">
                         <ul class="nav align-items-center gap-1">
-                            @foreach (var topItem in topbarItems)
+                            @if (User.Identity?.IsAuthenticated == true)
                             {
+                                @foreach (var topItem in topbarItems)
+                                {
                                 <li class="nav-item">
+                                    @if (topItem.BadgeText is null)
+                                    {
                                     <a class="nav-link odys-topbar-link odys-touch-target @(topItem.IsActive ? "active" : "")"
                                        asp-area=""
                                        asp-controller="@topItem.Controller"
                                        asp-action="@topItem.Action"
                                        aria-current="@(topItem.IsActive ? "page" : null)">
-                                        <span aria-hidden="true">@topItem.IconText</span>
-                                        <span class="d-none d-sm-inline ms-1">@topItem.Title</span>
+                                        <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", topItem.Key)</span>
+                                        <span>@topItem.Title</span>
                                     </a>
+                                    }
+                                    else
+                                    {
+                                    <span class="nav-link odys-topbar-link odys-touch-target odys-nav-link-disabled" aria-disabled="true">
+                                        <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", topItem.Key)</span>
+                                        <span>@topItem.Title</span>
+                                        <span class="odys-coming-soon">@topItem.BadgeText</span>
+                                    </span>
+                                    }
                                 </li>
+                                }
                             }
                             @if (User.Identity?.IsAuthenticated == true)
                             {
-                                <li class="nav-item ms-1">
-                                    <span class="odys-status-pill odys-status-active">@User.Identity.Name</span>
-                                </li>
                                 <li class="nav-item ms-1">
                                     <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
                                         @Html.AntiForgeryToken()
@@ -133,38 +152,67 @@
                     <h5 class="offcanvas-title fw-bold" id="odysMobileNavLabel">ÖDYS Menü</h5>
                     <button type="button" class="btn-close odys-touch-target" data-bs-dismiss="offcanvas" aria-label="Kapat"></button>
                 </div>
-                <div class="offcanvas-body d-flex flex-column justify-content-between">
+                <div class="offcanvas-body d-flex flex-column">
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
                     <nav aria-label="Mobil Modül Navigasyonu">
                         <ul class="nav flex-column gap-2">
                             @foreach (var item in sidebarItems)
                             {
                                 <li class="nav-item">
+                                    @if (item.BadgeText is null)
+                                    {
                                     <a class="nav-link odys-nav-link odys-touch-target @(item.IsActive ? "active" : "")"
                                        asp-area=""
                                        asp-controller="@item.Controller"
                                        asp-action="@item.Action"
                                        aria-current="@(item.IsActive ? "page" : null)">
-                                        <span class="odys-nav-icon" aria-hidden="true">@item.IconText</span>
+                                        <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", item.Key)</span>
                                         <span>@item.Title</span>
                                     </a>
+                                    }
+                                    else
+                                    {
+                                    <span class="nav-link odys-nav-link odys-touch-target odys-nav-link-disabled" aria-disabled="true">
+                                        <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", item.Key)</span>
+                                        <span>@item.Title</span>
+                                        <span class="odys-coming-soon">@item.BadgeText</span>
+                                    </span>
+                                    }
                                 </li>
                             }
                         </ul>
                     </nav>
+                    }
                     <div class="border-top pt-3 mt-3">
-                        <div class="small text-muted mb-2">Hesap ve Tercihler</div>
+                        <div class="small text-muted mb-2">Hesap</div>
                         <ul class="nav flex-column gap-1">
-                            @foreach (var topItem in topbarItems)
+                            @if (User.Identity?.IsAuthenticated == true)
                             {
+                                @foreach (var topItem in topbarItems)
+                                {
                                 <li class="nav-item">
+                                    @if (topItem.BadgeText is null)
+                                    {
                                     <a class="nav-link odys-nav-link odys-touch-target @(topItem.IsActive ? "active" : "")"
                                        asp-area=""
                                        asp-controller="@topItem.Controller"
-                                       asp-action="@topItem.Action">
-                                        <span class="odys-nav-icon" aria-hidden="true">@topItem.IconText</span>
+                                       asp-action="@topItem.Action"
+                                       aria-current="@(topItem.IsActive ? "page" : null)">
+                                        <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", topItem.Key)</span>
                                         <span>@topItem.Title</span>
                                     </a>
+                                    }
+                                    else
+                                    {
+                                    <span class="nav-link odys-nav-link odys-touch-target odys-nav-link-disabled" aria-disabled="true">
+                                        <span class="odys-nav-icon" aria-hidden="true">@await Html.PartialAsync("_NavigationIcon", topItem.Key)</span>
+                                        <span>@topItem.Title</span>
+                                        <span class="odys-coming-soon">@topItem.BadgeText</span>
+                                    </span>
+                                    }
                                 </li>
+                                }
                             }
                             @if (User.Identity?.IsAuthenticated == true)
                             {
@@ -200,7 +248,7 @@
             </div>
 
             <!-- Ana Sayfa İçeriği -->
-            <main role="main" class="odys-content flex-grow-1 p-3 p-md-4">
+            <main id="odysMainContent" role="main" tabindex="-1" class="odys-content flex-grow-1 p-3 p-md-4">
                 <div class="container-fluid">
                     @if (TempData["SuccessMessage"] is string successMessage)
                     {
@@ -232,6 +280,7 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/info-popover.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

@@ -5,7 +5,7 @@ namespace OzelDers.UnitTests;
 public class NavigationServiceTests
 {
     [Fact]
-    public void GetSidebarItems_ReturnsAllRequiredModulesInExpectedOrder()
+    public void GetSidebarItems_ReturnsAvailableAndUpcomingModulesInExpectedOrder()
     {
         var service = new NavigationService();
 
@@ -16,13 +16,20 @@ public class NavigationServiceTests
             {
                 "Ana Sayfa",
                 "Öğrenciler",
-                "Ders Türleri",
                 "Ders Programı",
                 "Ders Geçmişi",
                 "Ödemeler",
                 "Raporlar"
             },
             items.Select(i => i.Title).ToArray());
+
+        Assert.DoesNotContain(items, i => i.Key == "subjects");
+        Assert.All(items.Take(3), i => Assert.Null(i.BadgeText));
+        Assert.All(items.Skip(3), i =>
+        {
+            Assert.Equal("Yakında", i.BadgeText);
+            Assert.False(i.IsActive);
+        });
     }
 
     [Fact]
@@ -38,17 +45,29 @@ public class NavigationServiceTests
     }
 
     [Fact]
-    public void GetTopbarItems_ReturnsNotificationsProfileAndSettings()
+    public void GetTopbarItems_ShowsProfileAndUpcomingModules()
     {
         var service = new NavigationService();
 
-        var items = service.GetTopbarItems("Settings", "Index");
+        var items = service.GetTopbarItems("Subjects", "Index");
 
         Assert.Equal(
             new[] { "Bildirimler", "Profil", "Ayarlar" },
             items.Select(i => i.Title).ToArray());
 
         var active = Assert.Single(items, i => i.IsActive);
-        Assert.Equal("settings", active.Key);
+        Assert.Equal("profile", active.Key);
+        Assert.Null(active.BadgeText);
+        Assert.All(items.Where(i => i.Key != "profile"), i => Assert.Equal("Yakında", i.BadgeText));
+    }
+
+    [Fact]
+    public void GetSidebarItems_MarksStudentSubjectsAsStudents()
+    {
+        var service = new NavigationService();
+
+        var items = service.GetSidebarItems("StudentSubjects", "Edit");
+
+        Assert.Equal("students", Assert.Single(items, item => item.IsActive).Key);
     }
 }
