@@ -9,6 +9,13 @@ Bu dosya, yapay zekâ kod asistanlarının (Antigravity vb.) proje geliştirme s
 - **Geliştirme Modeli:** `docs/09-yol-haritasi.md` belgesinde tanımlanan **45 küçük faz**.
 - **Temel Referanslar:** `README.md` ve `docs/` klasöründeki (`01`–`13`) tüm dokümanlar bağlayıcıdır.
 
+### Güncel durum ve arayüz sürekliliği
+
+- Faz 1–23 tamamlandı; Faz 24'e başlanmadı. 45 fazlık yol haritası geçerlidir. UI yenilemesinin Aşama 1–3'ü `main` dalına alındı; Aşama 4–6 henüz yapılmadı.
+- Yeni veya yenilenen ekranlarda [`design-system.css`](src/OzelDers.Web/wwwroot/css/design-system.css) içindeki renk/değişkenleri ve ortak kart, tablo, form, buton, durum etiketi ve yerleşim stillerini kullan. Ortak [`_Layout.cshtml`](src/OzelDers.Web/Views/Shared/_Layout.cshtml) düzeniyle uyumlu ol; gereksiz açıklamaları çoğaltma, gerekli form etiketlerini ve hata mesajlarını koru.
+- Gerçekten açıklama gereken yerde [`_InfoPopover.cshtml`](src/OzelDers.Web/Views/Shared/_InfoPopover.cshtml) bileşenini kullan; açıklama varsayılan olarak kapalı ve klavye/dokunma ile erişilebilir olmalı.
+- Sol menüde Ders Türleri bağlantısı bulunmaz; yönetim Profil üzerinden erişilir. Ana Sayfa, Öğrenciler ve Ders Programı aktiftir; Ders Geçmişi, Ödemeler ve Raporlar henüz “Yakında” durumundadır. Masaüstü ve mobil menü aynı modül durumlarını göstermelidir. Ayrıntılar için [`docs/04-ekranlar-ve-akislar.md`](docs/04-ekranlar-ve-akislar.md) belgesine bak.
+
 ## 2. Faz Bazlı Geliştirme Kuralları (45 Faz)
 
 Her fazda aşağıdaki adımlar sırasıyla ve eksiksiz uygulanır:

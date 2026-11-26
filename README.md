@@ -2,8 +2,8 @@
 
 > Özel ders öğretmenleri için öğrenci, ders türü, haftalık program, yoklama, ücret ve tahsilat yönetimi ile **tek haftalık otomatik ders programlama** uygulaması.
 
-**Durum:** Planlama ve dokümantasyon (uygulama kodu henüz bu pakette yok).  
-**Dokümantasyon sürümü:** 1.1 — 22 Kasım 2026  
+**Durum:** Faz 1–23 tamamlandı; Faz 24'e başlanmadı. UI yenilemesinin Aşama 1–3 değişiklikleri `main` dalında (`cd22c9a`, `f8afc52`); Aşama 4–6 henüz yapılmadı.
+
 **Geliştirme yaklaşımı:** Antigravity ile 45 küçük faz, her faz sonunda öğrenme, test ve kullanıcı onayı.
 
 ## Proje hedefi
@@ -19,7 +19,7 @@
 5. Öğretmen kayıt olurken **en az bir ders türü** seçmek veya tanımlamak zorundadır; ilk ders otomatik olarak öğretmenin **varsayılan dersi** olur. Öğretmen sonradan yeni ders türleri ekleyebilir ve varsayılan dersini değiştirebilir.
 6. Bir öğrenciye farklı saatlik ücret, ders süresi ve haftalık oturum hedefleriyle **birden fazla ders türü** atanabilir (`StudentSubjects`); ancak takvimdeki **her bir ders oturumu (`Lessons`) yalnızca tek bir ders türüne** ait olabilir.
 
-## Modüller
+## Ürün kapsamındaki modüller
 
 - Öğretmen kaydı, giriş, profil, güvenli veri erişimi
 - Öğrenci listesi, ekleme, güncelleme, arşivleme ve detay
@@ -31,9 +31,13 @@
 - Taslak plan, düzenleme, alternatif öneri, onay ve transaction
 - Ders geçmişi, dashboard, raporlar, uygulama içi hatırlatmalar
 
-## Planlanan teknoloji (henüz uygulamaya geçirilmedi)
+## Teknoloji
 
-ASP.NET Core MVC / C#, Entity Framework Core, SQL Server, ASP.NET Core Identity, HTML/CSS/JavaScript, responsive tasarım. Takvim için FullCalendar, raporlar için Chart.js ve gerektiğinde OR-Tools değerlendirilebilir. Gerçek sürüm/paket seçimi geliştirme sırasında doğrulanacaktır.
+Uygulama ASP.NET Core MVC / C#, Entity Framework Core, SQL Server, ASP.NET Core Identity ve HTML/CSS/JavaScript kullanır. Responsive arayüzün ortak stilleri [`design-system.css`](src/OzelDers.Web/wwwroot/css/design-system.css) dosyasındadır. İlerideki modüller için FullCalendar, Chart.js ve gerektiğinde OR-Tools değerlendirilebilir; bunların kullanımı mevcut uygulamada varsayılmamalıdır.
+
+## Mevcut arayüz temeli
+
+UI Aşama 1–3 ile ortak renk, tipografi, kart, tablo, form, buton ve durum etiketleri; responsive yerleşim ve gerektiğinde açılan erişilebilir bilgi ikonları eklendi. Sol menüde Ana Sayfa, Öğrenciler ve Ders Programı çalışır. Ders Geçmişi, Ödemeler ve Raporlar “Yakında” etiketiyle pasiftir. Ders Türleri sol menüde yoktur; yönetimi Profil üzerinden erişilebilir. Öğrenci listesi masaüstünde tablo, dar ekranda kart düzeni kullanır; arama, filtre ve mevcut öğrenci işlemleri korunur. Ayrıntılar için [ekranlar ve akışlar](docs/04-ekranlar-ve-akislar.md) belgesine bakın.
 
 ## Dokümantasyon
 
@@ -67,13 +71,9 @@ ASP.NET Core MVC / C#, Entity Framework Core, SQL Server, ASP.NET Core Identity,
 | 43–44 | Bildirimler ve ayarlar |
 | 45 | Entegrasyon testleri ve yayın hazırlığı |
 
-## GitHub'a yükleme
+## Geliştirmeye devam
 
-1. ZIP içeriğini çıkar. **Dış klasörü değil, içindeki dosya/klasörleri** repository köküne yerleştir.
-2. `README.md`, `docs/`, `.github/`, `.gitignore` ve `.env.example` aynı kök düzeyinde olmalıdır.
-3. ZIP dosyasını tek parça olarak repoya yükleme. `README.md` otomatik görüntülenir; diğer belgeler `docs/` içinde açılır.
-4. Git üzerinden yüklemek gizli (`.` ile başlayan) dosyaları web arayüzünde sürükle-bırak yapmaktan daha güvenilirdir.
-5. Antigravity'de önce [45 faz planını](docs/09-yol-haritasi.md) okut; Faz 1 dışında kod geliştirme onayı verme.
+Faz 24 ve sonraki işler için [45 faz yol haritasını](docs/09-yol-haritasi.md) ve [çalışma talimatlarını](AGENTS.md) izleyin. Yeni ekranları mevcut [`design-system.css`](src/OzelDers.Web/wwwroot/css/design-system.css) ve ortak Razor bileşenleriyle uyumlu geliştirin; henüz yapılmamış UI Aşama 4–6'yı tamamlanmış kabul etmeyin.
 
 ## Güvenlik
 

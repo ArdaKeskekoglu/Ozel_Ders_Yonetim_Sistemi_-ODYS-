@@ -1,8 +1,8 @@
 # 10 — Antigravity ile çalışma rehberi
 
-Bu belge kod asistanını kontrollü kullanmak için görev önerileri içerir. Aracın belirli sürümüne bağlı özellikleri varsaymaz.
+Bu belge kod asistanını kontrollü kullanmak için görev önerileri içerir. Aracın belirli sürümüne bağlı özellikleri varsaymaz. Faz 1 başlangıç örnekleri tarihsel referanstır; güncel durum Faz 1–23 ve UI Aşama 1–3'ün tamamlanmış olmasıdır. UI Aşama 4–6 henüz yapılmadı.
 
-## İlk çalıştırma prompt'u — sadece analiz
+## Arşiv: ilk çalıştırma prompt'u — sadece analiz
 
 ```text
 Bu repository'deki README.md ve docs/*.md dosyalarını oku.
@@ -15,7 +15,7 @@ Bu repository'deki README.md ve docs/*.md dosyalarını oku.
 Yanıtı Türkçe ver; varsayımları kesin karar gibi sunma.
 ```
 
-## Faz 1 uygulama prompt'u
+## Arşiv: Faz 1 uygulama prompt'u
 
 ```text
 README.md, docs/05-mimari-veri-modeli.md, docs/08-kalite-test-guvenlik.md ve docs/09-yol-haritasi.md belgelerine göre yalnızca Faz 1 iskeletini kur.
@@ -66,18 +66,21 @@ Onay kısmını ayrıca ele al; sürüm kontrolü, idempotency ve transaction ol
 - Her özellikte kısa elle kullanım testi ve otomatik test sonucu ekle.
 
 
-## Güncel 45 faz için kesin çalışma kuralı (2026-11-22)
+## Güncel 45 faz için çalışma kuralı
 
-> Üstteki eski büyük fazlara gönderme yapan öneriler geçersizdir. Bağlayıcı yol haritası `docs/09-yol-haritasi.md` içindeki Faz 1–45'tir.
+> Bağlayıcı yol haritası `docs/09-yol-haritasi.md` içindeki Faz 1–45'tir; arşivdeki Faz 1 örnekleri yeni görev olarak kullanılmaz.
 
 Başlarken şu talimatı ver:
 
 ```text
 Bu repository Özel Ders Yönetim Sistemi projesidir.
-Önce README.md, docs/02-fonksiyonel-gereksinimler.md, docs/03-is-kurallari.md,
+Önce AGENTS.md, README.md, docs/02-fonksiyonel-gereksinimler.md, docs/03-is-kurallari.md,
+docs/04-ekranlar-ve-akislar.md,
 docs/09-yol-haritasi.md, docs/11-acik-kararlar.md,
 docs/12-gereksinim-faz-eslestirmesi.md dosyalarını oku.
-İlk görevin yalnızca Faz 1'i incelemek ve uygulanacak küçük adımları açıklamak.
+Faz 1–23 ve UI Aşama 1–3 tamamlandı; UI Aşama 4–6 yapılmadı.
+İlk görevin yalnızca Faz 24'ü incelemek ve uygulanacak küçük adımları açıklamak.
+Yeni ekranlarda mevcut design-system.css, ortak Layout ve bileşenleri kullan.
 Ben açıkça izin vermeden kodu değiştirme veya sonraki faza geçme.
 Her fazda: amaç, gereksinim ID'leri, değişecek dosyalar, testler,
 öğrenmem gereken kavramlar, olası riskler ve kabul kriterlerini bildir.

@@ -4,7 +4,13 @@
 
 ## Bilgi mimarisi
 
-Masaüstünde sol menü: **Ana Sayfa · Öğrenciler · Ders Programı · Ders Geçmişi · Ödemeler · Raporlar**. Sağ üstte bildirim, profil ve ayarlar. Mobilde sık kullanılan sayfalar kolay erişilebilir olmalı; kalan menüler açılır menüde olabilir.
+Mevcut masaüstü ve mobil menüde **Ana Sayfa · Öğrenciler · Ders Programı** bağlantıları çalışır; **Ders Geçmişi · Ödemeler · Raporlar** “Yakında” etiketiyle pasiftir ve çalışmayan sayfaya yönlendirmez. Ders Türleri sol menüde bulunmaz; Profil içindeki **Ders Türlerini Yönet** bağlantısından erişilir. Üstte Profil çalışır; Bildirimler ve Ayarlar “Yakında” durumundadır. Mobil menü aynı öğeleri açılır panelde gösterir.
+
+### Tamamlanan UI temeli (Aşama 1–3)
+
+[`design-system.css`](../src/OzelDers.Web/wwwroot/css/design-system.css), lacivert metin/yan menü, mavi ana işlem rengi (`#2458c7`), açık gri zemin (`#f5f7fb`), beyaz yüzey ve tutarlı kenarlık/boşluk değerlerini tanımlar. Yazı tipi önceliği Segoe UI, Inter ve sistem fontlarıdır. Ortak kart (`.odys-card`), Bootstrap uyumlu buton/form/tablo stilleri ve metinli durum etiketleri yeni ekranlarda da kullanılmalıdır. [`_Layout.cshtml`](../src/OzelDers.Web/Views/Shared/_Layout.cshtml) bu stilleri yükler; klavye için “İçeriğe geç” bağlantısı ve responsive navigasyonu sağlar.
+
+Başlık yanında yalnızca gerekli açıklamalar için [`_InfoPopover.cshtml`](../src/OzelDers.Web/Views/Shared/_InfoPopover.cshtml) kullanılır. Bilgi simgesi açıklamayı tıklama/dokunma ile açar; kapatma düğmesi, dışarı tıklama ve Escape ile kapanır. Erişilebilir ad ve açık/kapalı durumu duyurulur. Form etiketleri, hata ve doğrulama mesajları sadeleştirme sırasında korunur.
 
 ### Sayfa haritası
 
@@ -20,7 +26,7 @@ Masaüstünde sol menü: **Ana Sayfa · Öğrenciler · Ders Programı · Ders G
 /Settings → Profile / WorkingHours / Notifications
 ```
 
-Gerçek route adları geliştirmede değişebilir.
+Bu harita ürün hedefidir; tüm yolların şu anda mevcut olduğunu göstermez. Mevcut ana sayfa `/`, öğrenci listesi `/Students`, profil `/Account/Profile`, ders türleri yönetimi `/Subjects` üzerinden açılır. Gelecek ekranların gerçek route adları ilgili fazda belirlenir.
 
 ## Ekran 1 — Dashboard
 
@@ -28,12 +34,12 @@ Gerçek route adları geliştirmede değişebilir.
 
 ## Ekran 2 — Öğrenci listesi ve detayı
 
-Liste sütunları: ad-soyad, ders türleri, aktiflik, bir sonraki ders, toplam açık bakiye. Arama ve filtre. Detay sekmeleri: Genel Bilgiler, Dersler, Ödemeler, Müsaitlik, Notlar. Öğrenciyi arşivleme geri alınabilir olmalı.
+Mevcut `/Students` listesinde öğrenci adı/e-posta, ders türleri, telefon, durum, not ve işlemler gösterilir. Öğrenci adı detaya gider; ders/ücret yönetimi ve düzenleme bağlantıları ile arşivleme/geri alma işlemleri korunur. Arama, ders türü ve durum filtreleri vardır. Masaüstünde okunabilir tablo, dar ekranda aynı içerikten kart görünümü kullanılır; sonuçsuz arama ve boş liste durumları ayrı gösterilir. Sonraki ders, açık bakiye ve planlanan detay sekmeleri ileriki fazların hedefidir; bugün uygulanmış sayılmamalıdır.
 
 ## Ekran 3 — Ders türleri ve kayıt/profil bağlantısı
 
 - **Kayıt ekranı (`/Account/Register`):** Öğretmen kayıt olurken en az bir ders türü seçmek veya tanımlamak zorundadır. İlk seçilen/tanımlanan ders otomatik olarak öğretmenin **varsayılan dersi** olur.
-- **Profil ekranı (`/Account/Profile`):** Öğretmenin mevcut varsayılan dersi görüntülenir. Henüz dersi olmayan eski hesaplar için tamamlayıcı ilk ders türü tanımlama alanı sunulur.
+- **Profil ekranı (`/Account/Profile`):** Öğretmenin mevcut varsayılan dersi görüntülenir ve Ders Türlerini Yönet bağlantısı `/Subjects` ekranını açar. Henüz dersi olmayan eski hesaplar için tamamlayıcı ilk ders türü tanımlama alanı sunulur.
 - **Ders türleri yönetim ekranı (`/Subjects`):** Öğretmenin kendi ders türlerini eklediği, düzenlediği, varsayılan dersini değiştirdiği ve eski kayıt kullanan türleri güvenli biçimde arşivlediği liste. Tek aktif ders varsa otomatik varsayılan kalır.
 - **Öğrenciye ders atama:** Öğrenci detayında ders atanırken öğretmenin varsayılan dersi otomatik seçili gelir; öğretmen isterse başka ders türünü seçebilir. Bir öğrenciye birden fazla ders türü atanabilir ve her öğrenci–ders türü ilişkisi için saatlik ücret (`HourlyRate`), oturum süresi (`DefaultDurationMinutes`) ve haftalık ders oturumu adedi (`WeeklyTargetCount`) ayrı ayarlanır.
 
