@@ -3,45 +3,41 @@
     ViewData["Title"] = "Öğrenciler";
 }
 
-<section class="odys-card p-4 mb-4">
+<section class="odys-card odys-students-toolbar p-3 p-md-4 mb-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
         <div>
-            <span class="odys-status-pill odys-status-active mb-2">Öğrenci Yönetimi</span>
-            <h1 class="h4 fw-bold mb-1">Öğrencilerim</h1>
-            <p class="small text-muted mb-0">
-                Yalnızca kendi hesabınıza kayıtlı öğrencileri görüntüleyebilir, aldığı ders türüne veya durumuna göre filtreleyebilir ve detay kartlarını inceleyebilirsiniz.
-            </p>
+            <h1 class="h4 fw-bold mb-0">Öğrencilerim</h1>
         </div>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <span class="badge bg-primary-subtle text-primary-emphasis px-3 py-2">
-                Aktif: @Model.ActiveCount
+        <div class="d-flex flex-wrap align-items-center gap-2 odys-students-header-actions">
+            <span class="odys-student-count odys-student-count-active">
+                Aktif <strong>@Model.ActiveCount</strong>
             </span>
-            <span class="badge bg-secondary-subtle text-secondary-emphasis px-3 py-2">
-                Arşiv: @Model.ArchivedCount
+            <span class="odys-student-count">
+                Arşiv <strong>@Model.ArchivedCount</strong>
             </span>
-            <a class="btn btn-primary odys-touch-target px-3 fw-semibold"
-               asp-controller="Students"
-               asp-action="Create">
-                + Yeni Öğrenci Ekle
-            </a>
+            @if (Model.HasAnyStudents)
+            {
+                <a class="btn btn-primary odys-touch-target px-3 fw-semibold odys-students-add"
+                   asp-controller="Students"
+                   asp-action="Create">
+                    + Yeni Öğrenci
+                </a>
+            }
         </div>
     </div>
 
-    <hr class="my-3" />
-
-    <!-- Arama, Ders Türü ve Durum Filtresi -->
-    <form asp-controller="Students" asp-action="Index" method="get" class="row g-2 align-items-center">
-        <div class="col-12 col-md-4 col-lg-4">
+    <form asp-controller="Students" asp-action="Index" method="get" class="odys-students-filters mt-3 pt-3">
+        <div class="odys-students-search">
             <label for="searchTerm" class="visually-hidden">Öğrenci Ara</label>
             <input type="search"
                    id="searchTerm"
                    name="searchTerm"
                    value="@Model.SearchTerm"
                    class="form-control"
-                   placeholder="Ad, soyad, telefon veya notlarda ara..." />
+                   placeholder="Öğrenci ara" />
         </div>
 
-        <div class="col-12 col-sm-6 col-md-3 col-lg-3">
+        <div class="odys-students-subject-filter">
             <label for="subjectId" class="visually-hidden">Ders Türü Filtresi</label>
             <select id="subjectId" name="subjectId" class="form-select">
                 <option value="">Tüm Ders Türleri</option>
@@ -54,7 +50,7 @@
             </select>
         </div>
 
-        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
+        <div class="odys-students-status-filter">
             <label for="status" class="visually-hidden">Durum Filtresi</label>
             <select id="status" name="status" class="form-select">
                 <option value="@StudentStatusFilter.Active" selected="@(Model.Status == StudentStatusFilter.Active)">
@@ -69,8 +65,8 @@
             </select>
         </div>
 
-        <div class="col-12 col-md-2 col-lg-3 d-flex gap-2">
-            <button type="submit" class="btn btn-primary odys-touch-target px-4 fw-semibold">
+        <div class="odys-students-filter-actions">
+            <button type="submit" class="btn btn-primary odys-touch-target px-3 fw-semibold">
                 Filtrele
             </button>
             @if (!string.IsNullOrWhiteSpace(Model.SearchTerm) || Model.Status != StudentStatusFilter.Active || Model.SubjectId.HasValue)
@@ -87,13 +83,10 @@
 
 @if (!Model.HasAnyStudents)
 {
-    <!-- Boş Durum (Empty State): Henüz hiç öğrenci eklenmemiş -->
-    <section class="odys-card p-5 text-center" aria-label="Boş Öğrenci Listesi">
-        <div class="display-6 mb-3" aria-hidden="true">👥</div>
-        <h2 class="h5 fw-bold mb-2">Henüz kayıtlı öğrenciniz bulunmuyor</h2>
-        <p class="text-muted small mx-auto mb-3" style="max-width: 480px;">
-            Özel ders verdiğiniz öğrencileri eklediğinizde iletişim bilgileri, ders türleri, haftalık programları ve bakiye durumları bu ekranda listelenecektir.
-        </p>
+    <section class="odys-card odys-students-empty p-4 p-md-5 text-center" aria-label="Boş Öğrenci Listesi">
+        <div class="odys-students-empty-icon mb-3" aria-hidden="true">👥</div>
+        <h2 class="h5 fw-bold mb-2">Henüz öğrenciniz yok</h2>
+        <p class="text-muted small mb-3">İlk öğrencinizi ekleyerek başlayın.</p>
         <a class="btn btn-primary odys-touch-target px-4 fw-semibold"
            asp-controller="Students"
            asp-action="Create">
@@ -103,12 +96,9 @@
 }
 else if (!Model.HasFilteredResults)
 {
-    <!-- Filtre / Arama Sonucu Boş Durum -->
-    <section class="odys-card p-5 text-center" aria-label="Filtre Sonucu Bulunamadı">
-        <h2 class="h5 fw-bold mb-2">Arama veya filtre kriterlerine uygun öğrenci bulunamadı</h2>
-        <p class="text-muted small mb-3">
-            Farklı bir isimle arama yapabilir veya ders türü/durum filtresini sıfırlayabilirsiniz.
-        </p>
+    <section class="odys-card odys-students-empty p-4 p-md-5 text-center" aria-label="Filtre Sonucu Bulunamadı">
+        <h2 class="h5 fw-bold mb-2">Öğrenci bulunamadı</h2>
+        <p class="text-muted small mb-3">Aramayı veya filtreleri değiştirin.</p>
         <a class="btn btn-outline-primary odys-touch-target px-4 fw-semibold"
            asp-controller="Students"
            asp-action="Index">
@@ -118,58 +108,59 @@ else if (!Model.HasFilteredResults)
 }
 else
 {
-    <!-- Öğrenci Listesi Tablosu -->
-    <section class="odys-card overflow-hidden" aria-label="Öğrenci Listesi">
+    <section class="odys-card odys-students-results" aria-label="Öğrenci Listesi">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+            <table class="table table-hover align-middle mb-0 odys-students-table">
+                <thead>
                     <tr>
-                        <th scope="col" class="ps-4">Ad Soyad</th>
-                        <th scope="col">Aldığı Ders Türleri</th>
+                        <th scope="col">Öğrenci</th>
+                        <th scope="col">Ders Türleri</th>
                         <th scope="col">Telefon</th>
                         <th scope="col">Durum</th>
-                        <th scope="col">Not Özeti</th>
-                        <th scope="col" class="text-end pe-4">İşlemler</th>
+                        <th scope="col">Not</th>
+                        <th scope="col">İşlemler</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var student in Model.Students)
                     {
                         <tr>
-                            <td class="ps-4">
-                                <a class="fw-semibold text-decoration-none"
-                                   asp-controller="Students"
-                                   asp-action="Details"
-                                   asp-route-id="@student.Id">
-                                    @student.FullName
-                                </a>
-                                @if (!string.IsNullOrWhiteSpace(student.Email))
-                                {
-                                    <div class="small text-muted">@student.Email</div>
-                                }
+                            <td class="odys-student-identity" data-label="Öğrenci">
+                                <div>
+                                    <a class="odys-student-name fw-semibold text-decoration-none"
+                                       asp-controller="Students"
+                                       asp-action="Details"
+                                       asp-route-id="@student.Id">
+                                        @student.FullName
+                                    </a>
+                                    @if (!string.IsNullOrWhiteSpace(student.Email))
+                                    {
+                                        <div class="small text-muted">@student.Email</div>
+                                    }
+                                </div>
                             </td>
-                            <td>
+                            <td data-label="Ders Türleri">
                                 @if (student.ActiveSubjects.Count == 0)
                                 {
                                     <span class="text-muted small">Ders atanmadı</span>
                                 }
                                 else
                                 {
-                                    <div class="d-flex flex-wrap gap-1">
+                                    <div class="d-flex flex-wrap gap-1 odys-student-subjects">
                                         @foreach (var subj in student.ActiveSubjects)
                                         {
-                                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill px-2 py-1">
-                                                @subj.SubjectName (@subj.WeeklyTargetCount×@subj.DefaultDurationMinutes dk • @subj.HourlyRate.ToString("N0") ₺)
+                                            <span class="odys-student-subject">
+                                                @subj.SubjectName <small>@subj.WeeklyTargetCount×@subj.DefaultDurationMinutes dk · @subj.HourlyRate.ToString("N0") ₺</small>
                                             </span>
                                         }
                                     </div>
                                 }
                             </td>
-                            <td>@(string.IsNullOrWhiteSpace(student.PhoneNumber) ? "—" : student.PhoneNumber)</td>
-                            <td>
+                            <td data-label="Telefon">@(string.IsNullOrWhiteSpace(student.PhoneNumber) ? "—" : student.PhoneNumber)</td>
+                            <td data-label="Durum">
                                 @if (student.IsArchived)
                                 {
-                                    <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill px-3 py-1">
+                                    <span class="odys-status-pill odys-status-muted">
                                         Arşivlendi
                                     </span>
                                 }
@@ -180,24 +171,18 @@ else
                                     </span>
                                 }
                             </td>
-                            <td class="text-muted small" style="max-width: 220px;">
-                                <span class="d-inline-block text-truncate" style="max-width: 220px;">
+                            <td class="odys-student-note text-muted small" data-label="Not">
+                                <span class="d-inline-block text-truncate">
                                     @(string.IsNullOrWhiteSpace(student.Notes) ? "—" : student.Notes)
                                 </span>
                             </td>
-                            <td class="text-end pe-4">
-                                <div class="d-inline-flex align-items-center gap-2">
+                            <td class="odys-student-actions-cell" data-label="İşlemler">
+                                <div class="odys-student-actions">
                                     <a class="btn btn-outline-primary btn-sm odys-touch-target px-3"
-                                       asp-controller="Students"
-                                       asp-action="Details"
-                                       asp-route-id="@student.Id">
-                                        Detay
-                                    </a>
-                                    <a class="btn btn-outline-dark btn-sm odys-touch-target px-3"
                                        asp-controller="StudentSubjects"
                                        asp-action="Index"
                                        asp-route-studentId="@student.Id">
-                                        Dersler &amp; Ücretler
+                                        Dersler / Ücretler
                                     </a>
                                     <a class="btn btn-outline-secondary btn-sm odys-touch-target px-3"
                                        asp-controller="Students"

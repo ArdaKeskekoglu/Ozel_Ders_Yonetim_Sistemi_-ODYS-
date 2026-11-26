@@ -144,6 +144,121 @@ a:hover { color: var(--odys-primary-dark); }
 .odys-status-warning { background: #fff1d2; color: #775000; }
 .odys-status-muted { background: #edf0f4; color: #48576b; }
 
+/* Öğrenci listesi: aynı içerik geniş ekranda tablo, dar ekranda satır kartı olur. */
+.odys-students-header-actions { margin-left: auto; }
+.odys-student-count {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 32px;
+  padding: .25rem .65rem;
+  border-radius: .55rem;
+  background: #edf0f4;
+  color: #48576b;
+  font-size: .82rem;
+  white-space: nowrap;
+}
+.odys-student-count-active { background: var(--odys-primary-soft); color: var(--odys-primary-dark); }
+.odys-students-filters {
+  display: grid;
+  grid-template-columns: minmax(190px, 2fr) minmax(170px, 1.35fr) minmax(135px, .85fr) auto;
+  align-items: center;
+  gap: .65rem;
+  border-top: 1px solid var(--odys-line);
+}
+.odys-students-filter-actions { display: flex; gap: .5rem; }
+.odys-students-results { overflow: hidden; }
+.odys-students-table { min-width: 980px; }
+.odys-students-table thead { background: #f7f9fc; }
+.odys-students-table th,
+.odys-students-table td { padding-inline: .8rem; }
+.odys-students-table th:first-child,
+.odys-students-table td:first-child { padding-left: 1.15rem; }
+.odys-students-table th:last-child,
+.odys-students-table td:last-child { padding-right: 1.15rem; }
+.odys-students-table th:nth-child(1) { width: 16%; }
+.odys-students-table th:nth-child(2) { width: 27%; }
+.odys-students-table th:nth-child(3) { width: 12%; }
+.odys-students-table th:nth-child(4) { width: 10%; }
+.odys-students-table th:nth-child(5) { width: 11%; }
+.odys-students-table th:nth-child(6) { width: 24%; }
+.odys-student-name { color: var(--odys-primary-dark); }
+.odys-student-name:hover { text-decoration: underline !important; }
+.odys-student-subject {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  align-items: baseline;
+  padding: .24rem .55rem;
+  border-radius: .5rem;
+  background: var(--odys-primary-soft);
+  color: var(--odys-primary-dark);
+  font-size: .79rem;
+  font-weight: 600;
+}
+.odys-student-subject small { font-size: .75rem; font-weight: 400; }
+.odys-student-note span { max-width: 130px; vertical-align: middle; }
+.odys-student-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.odys-student-actions .btn { white-space: nowrap; }
+.odys-students-empty { max-width: 100%; }
+.odys-students-empty-icon { font-size: 2rem; line-height: 1; }
+@media (max-width: 1199.98px) {
+  .odys-students-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .odys-students-search { grid-column: 1 / -1; }
+  .odys-students-filter-actions { grid-column: 1 / -1; }
+  .odys-students-table { min-width: 0; }
+  .odys-students-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .odys-students-table tbody,
+  .odys-students-table tr,
+  .odys-students-table td { display: block; }
+  .odys-students-results { border: 0; background: transparent; box-shadow: none; }
+  .odys-students-table tr {
+    margin-bottom: .75rem;
+    padding: .4rem .85rem;
+    border: 1px solid var(--odys-line);
+    border-radius: var(--odys-radius);
+    background: var(--odys-surface);
+    box-shadow: var(--odys-shadow);
+  }
+  .odys-students-table td,
+  .odys-students-table td:first-child,
+  .odys-students-table td:last-child {
+    display: grid;
+    grid-template-columns: 105px minmax(0, 1fr);
+    gap: .6rem;
+    align-items: start;
+    padding: .55rem .3rem;
+    border: 0;
+  }
+  .odys-students-table td + td { border-top: 1px solid var(--odys-line); }
+  .odys-students-table td::before {
+    content: attr(data-label);
+    color: var(--odys-muted);
+    font-size: .78rem;
+    font-weight: 600;
+  }
+  .odys-students-table .odys-student-note span { max-width: min(100%, 400px); }
+  .odys-student-actions { gap: .45rem; }
+}
+@media (max-width: 575.98px) {
+  .odys-students-header-actions { width: 100%; margin-left: 0; }
+  .odys-students-add { width: 100%; justify-content: center; }
+  .odys-students-filters { grid-template-columns: minmax(0, 1fr); }
+  .odys-students-search,
+  .odys-students-filter-actions { grid-column: auto; }
+  .odys-students-filter-actions .btn { flex: 1; justify-content: center; }
+  .odys-students-table td,
+  .odys-students-table td:first-child,
+  .odys-students-table td:last-child { grid-template-columns: 82px minmax(0, 1fr); }
+}
+
 .odys-info { position: relative; display: inline-flex; vertical-align: middle; }
 .odys-info-toggle {
   width: 36px;
