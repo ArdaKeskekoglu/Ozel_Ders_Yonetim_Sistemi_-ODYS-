@@ -52,7 +52,17 @@ public class LessonDetailsViewModel
 
     public DateTime? AttendanceVerifiedAtUtc { get; init; }
 
+    public LessonFeeDecision FeeDecision { get; init; }
+
+    public DateTime? FeeDecisionAtUtc { get; init; }
+
+    public string? FeeDecisionReason { get; init; }
+
     public bool IsPendingAttendanceVerification { get; init; }
+
+    public bool IsPendingFeeDecision =>
+        AttendanceStatus == LessonAttendanceStatus.Absent &&
+        FeeDecision == LessonFeeDecision.Pending;
 
     public string? Notes { get; init; }
 
@@ -87,14 +97,35 @@ public class LessonDetailsViewModel
             _ => "Henüz Ders Saati Gelmedi / Planlı"
         };
 
+    public string FeeDecisionBadgeText =>
+        FeeDecision switch
+        {
+            LessonFeeDecision.Charge => $"Ücret Alınacak ({SessionFeeSnapshot:N2} ₺)",
+            LessonFeeDecision.Waive => "Ücret Alınmayacak / Muaf (0,00 ₺)",
+            _ when AttendanceStatus == LessonAttendanceStatus.Absent => "Devamsızlık Ücret Kararı Bekliyor",
+            _ => "Yoklama Sonrası Belirlenecek"
+        };
+
+    public string FeeDecisionBadgeCssClass =>
+        FeeDecision switch
+        {
+            LessonFeeDecision.Charge => "bg-primary-subtle text-primary-emphasis",
+            LessonFeeDecision.Waive => "bg-secondary-subtle text-secondary-emphasis",
+            _ when AttendanceStatus == LessonAttendanceStatus.Absent => "bg-warning-subtle text-warning-emphasis",
+            _ => "bg-light text-muted border"
+        };
+
     public string StatusBadgeText =>
         AttendanceStatus switch
         {
             LessonAttendanceStatus.Attended => "Geldi • Tamamlandı",
-            LessonAttendanceStatus.Absent => "Gelmedi",
+            LessonAttendanceStatus.Absent when FeeDecision == LessonFeeDecision.Charge => "Gelmedi • Ücret Alınacak",
+            LessonAttendanceStatus.Absent when FeeDecision == LessonFeeDecision.Waive => "Gelmedi • Ücret Alınmayacak",
+            LessonAttendanceStatus.Absent => "Gelmedi • Ücret Kararı Bekliyor",
             _ => Status switch
             {
                 LessonStatus.Completed => "Tamamlandı",
+                LessonStatus.Cancelled when FeeDecision == LessonFeeDecision.Charge => "İptal • Ücret Alınacak",
                 LessonStatus.Cancelled => "İptal Edildi",
                 LessonStatus.Rescheduled when IsPendingAttendanceVerification => "Ertelendi • Yoklama Bekliyor",
                 LessonStatus.Rescheduled => "Ertelendi",
@@ -107,6 +138,7 @@ public class LessonDetailsViewModel
         AttendanceStatus switch
         {
             LessonAttendanceStatus.Attended => "bg-success-subtle text-success-emphasis",
+            LessonAttendanceStatus.Absent when FeeDecision == LessonFeeDecision.Pending => "bg-warning-subtle text-warning-emphasis",
             LessonAttendanceStatus.Absent => "bg-danger-subtle text-danger-emphasis",
             _ => Status switch
             {

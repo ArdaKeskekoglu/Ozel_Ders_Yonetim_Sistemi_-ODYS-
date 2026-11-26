@@ -117,30 +117,32 @@
     </div>
 </section>
 
-<!-- Yoklama ve Ders Gerçekleşme Durumu Kartı (FR-057..FR-062) -->
+<!-- Yoklama, Ders Gerçekleşme Durumu ve Devamsızlıkta Ücret Kararı Kartı (FR-057..FR-068) -->
 <section class="odys-card p-4 mb-4" aria-label="Yoklama ve Ders Gerçekleşme Durumu">
     <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-3">
         <div>
             <div class="d-flex align-items-center gap-1">
-                <h2 class="h5 fw-bold mb-0">Yoklama ve Ders Gerçekleşme Durumu</h2>
+                <h2 class="h5 fw-bold mb-0">Yoklama, Gerçekleşme Durumu ve Ücret Kararı</h2>
                 @await Html.PartialAsync("_InfoPopover", new KeyValuePair<string, string>(
-                    "Yoklama ve gerçekleşme durumu",
-                    "Ders saati geçtiğinde ders otomatik olarak tamamlandı sayılmaz (FR-060). Öğrencinin derse gelip gelmediğini veya dersin iptal durumunu buradan kaydedebilir ve sonradan güncelleyebilirsiniz."))
+                    "Yoklama ve devamsızlık ücret kararı",
+                    "Ders saati geçtiğinde ders otomatik tamamlanmaz (FR-060) ve öğrenci gelmediğinde otomatik borç oluşturulmaz (BR-02, FR-066). Gelmeme durumunda ücret alınıp alınmayacağını bu ders için ayrı belirleyebilir veya sonradan düzeltebilirsiniz."))
             </div>
-            <p class="small text-muted mb-0 mt-1">
-                Mevcut yoklama durumu: <strong>@Model.AttendanceBadgeText</strong>
+            <div class="d-flex flex-wrap align-items-center gap-2 small text-muted mt-1">
+                <span>Katılım durumu: <strong>@Model.AttendanceBadgeText</strong></span>
+                <span>•</span>
+                <span>Ücret kararı: <span class="badge rounded-pill @Model.FeeDecisionBadgeCssClass">@Model.FeeDecisionBadgeText</span></span>
                 @if (Model.AttendanceVerifiedAtUtc.HasValue)
                 {
-                    <span>• Doğrulanma zamanı: @Model.AttendanceVerifiedAtUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                    <span>• Son işlem: @Model.AttendanceVerifiedAtUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
                 }
-            </p>
+            </div>
         </div>
 
         <a class="btn btn-outline-warning text-dark btn-sm odys-touch-target px-3 fw-semibold"
            asp-controller="Schedule"
            asp-action="PendingAttendance"
            asp-route-date="@Model.WeekStartDate.ToString("yyyy-MM-dd")">
-            Bu Haftanın Bekleyen Yoklamaları
+            Bu Haftanın Bekleyen İşlemleri
         </a>
     </div>
 
@@ -154,7 +156,7 @@
         <input type="hidden" name="ReturnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
 
         <div class="col-12 col-md-4">
-            <label for="AttendanceStatus" class="form-label small fw-semibold">Katılım ve Gerçekleşme Seçimi</label>
+            <label for="AttendanceStatus" class="form-label small fw-semibold">1. Öğrenci Katılım Durumu</label>
             <select id="AttendanceStatus"
                     name="AttendanceStatus"
                     class="form-select odys-touch-target">
@@ -173,22 +175,98 @@
             </select>
         </div>
 
-        <div class="col-12 col-md-5">
-            <label for="AttendanceNote" class="form-label small fw-semibold">Yoklama / Katılım Notu (İsteğe Bağlı)</label>
+        <div class="col-12 col-md-3">
+            <label for="FeeDecisionSelect" class="form-label small fw-semibold">2. Gelmediyse Ücret Kararı</label>
+            <select id="FeeDecisionSelect"
+                    name="FeeDecision"
+                    class="form-select odys-touch-target">
+                <option value="" selected="@(Model.AttendanceStatus == LessonAttendanceStatus.Absent && Model.FeeDecision == LessonFeeDecision.Pending)">
+                    Karar Bekliyor (Otomatik Borç Yok)
+                </option>
+                <option value="@LessonFeeDecision.Waive" selected="@(Model.FeeDecision == LessonFeeDecision.Waive)">
+                    Ücret Alınmayacak / Muaf (0 ₺)
+                </option>
+                <option value="@LessonFeeDecision.Charge" selected="@(Model.AttendanceStatus == LessonAttendanceStatus.Absent && Model.FeeDecision == LessonFeeDecision.Charge)">
+                    Ücret Alınacak (@Model.SessionFeeSnapshot.ToString("N2") ₺)
+                </option>
+            </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="AttendanceNote" class="form-label small fw-semibold">3. Açıklama / Not (İsteğe Bağlı)</label>
             <input type="text"
                    id="AttendanceNote"
                    name="AttendanceNote"
                    maxlength="500"
                    class="form-control odys-touch-target"
-                   placeholder="Örn: Öğrenci zamanında geldi / Veli bilgi verdi..." />
+                   placeholder="Örn: Veli bilgi verdi / Son dakika iptali..." />
         </div>
 
-        <div class="col-12 col-md-3 d-grid">
+        <div class="col-12 col-md-2 d-grid">
             <button type="submit" class="btn btn-primary odys-touch-target fw-semibold">
-                Yoklama Durumunu Kaydet
+                Kaydet
             </button>
         </div>
     </form>
+
+    @if (Model.IsAbsent || Model.IsCancelled)
+    {
+        <hr class="my-3" />
+        <div class="p-3 rounded-3 bg-light border">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-2">
+                <div>
+                    <div class="fw-bold small">Devamsızlık / İptal Ücretlendirme Kararı ve Kontrollü Düzeltme (FR-065..FR-068)</div>
+                    <div class="small text-muted">
+                        Öğrenci gelmediğinde otomatik borç oluşmaz. Bu ders için ücret alınıp alınmayacağını aşağıdan belirleyebilir veya gerekçesiyle güncelleyebilirsiniz.
+                    </div>
+                </div>
+                <span class="badge rounded-pill @Model.FeeDecisionBadgeCssClass px-3 py-1">
+                    @Model.FeeDecisionBadgeText
+                </span>
+            </div>
+
+            <form asp-controller="Schedule"
+                  asp-action="SetFeeDecision"
+                  method="post"
+                  class="row g-2 align-items-end mt-1">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="LessonId" value="@Model.LessonId" />
+                <input type="hidden" name="ReturnToDetails" value="true" />
+                <input type="hidden" name="ReturnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+
+                <div class="col-12 col-md-4">
+                    <label for="UpdateFeeDecision" class="form-label small fw-semibold mb-1">Bu Derste Ücret Alınacak mı?</label>
+                    <select id="UpdateFeeDecision"
+                            name="FeeDecision"
+                            class="form-select form-select-sm odys-touch-target">
+                        <option value="@LessonFeeDecision.Waive" selected="@(Model.FeeDecision != LessonFeeDecision.Charge)">
+                            Hayır — Ücret Alınmayacak / Muaf (0,00 ₺)
+                        </option>
+                        <option value="@LessonFeeDecision.Charge" selected="@(Model.FeeDecision == LessonFeeDecision.Charge)">
+                            Evet — Ücret Alınacak (@Model.SessionFeeSnapshot.ToString("N2") ₺)
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-5">
+                    <label for="FeeDecisionReason" class="form-label small fw-semibold mb-1">Karar veya Düzeltme Gerekçesi</label>
+                    <input type="text"
+                           id="FeeDecisionReason"
+                           name="Reason"
+                           value="@Model.FeeDecisionReason"
+                           maxlength="500"
+                           class="form-control form-control-sm odys-touch-target"
+                           placeholder="Örn: Önceden haber verildi / Habersiz devamsızlık..." />
+                </div>
+
+                <div class="col-12 col-md-3 d-grid">
+                    <button type="submit" class="btn btn-outline-primary btn-sm odys-touch-target fw-semibold">
+                        Ücret Kararını Güncelle
+                    </button>
+                </div>
+            </form>
+        </div>
+    }
 </section>
 
 <!-- Detaylı Oturum Bilgileri ve Notlar -->

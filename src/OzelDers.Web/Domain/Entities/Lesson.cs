@@ -59,6 +59,22 @@ public class Lesson : BaseEntity
     public DateTime? AttendanceVerifiedAtUtc { get; set; }
 
     /// <summary>
+    /// Ders oturumu için ücret kararı (Pending, Charge, Waive) (FR-065..FR-068, BR-02, BR-03).
+    /// Öğrenci gelmediğinde otomatik Charge olmaz; öğretmen ders bazında seçer.
+    /// </summary>
+    public LessonFeeDecision FeeDecision { get; set; } = LessonFeeDecision.Pending;
+
+    /// <summary>
+    /// Öğretmenin ücret kararını belirlediği veya son güncellediği zaman (UTC) (FR-068).
+    /// </summary>
+    public DateTime? FeeDecisionAtUtc { get; set; }
+
+    /// <summary>
+    /// Devamsızlıkta ücret kararının veya sonradan yapılan ücret kararı düzeltmesinin gerekçesi (FR-068).
+    /// </summary>
+    public string? FeeDecisionReason { get; set; }
+
+    /// <summary>
     /// Ders oturumuna özel öğretmen notu veya konu özeti.
     /// </summary>
     public string? Notes { get; set; }

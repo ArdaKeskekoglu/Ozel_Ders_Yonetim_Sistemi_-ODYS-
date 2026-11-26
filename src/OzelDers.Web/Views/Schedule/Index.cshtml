@@ -61,7 +61,7 @@
                asp-controller="Schedule"
                asp-action="PendingAttendance"
                asp-route-date="@Model.WeekStartDate.ToString("yyyy-MM-dd")">
-                Yoklama Bekleyenler (@Model.PendingVerificationCount)
+                Bekleyen İşlemler (@(Model.PendingVerificationCount + Model.PendingFeeDecisionCount))
             </a>
 
             <a class="btn btn-primary odys-touch-target px-3 fw-semibold"
@@ -112,20 +112,24 @@
         <div class="col-12 col-sm-6 col-lg-3">
             <div class="p-3 rounded-3 bg-light border h-100 d-flex flex-column justify-content-between">
                 <div>
-                    <div class="small text-muted">Yoklama Doğrulaması Bekleyen</div>
-                    <div class="h5 fw-bold @(Model.PendingVerificationCount > 0 ? "text-warning-emphasis" : "") mb-0">
-                        @Model.PendingVerificationCount Oturum
+                    <div class="small text-muted">Yoklama &amp; Ücret Kararı Bekleyen</div>
+                    <div class="h5 fw-bold @((Model.PendingVerificationCount + Model.PendingFeeDecisionCount) > 0 ? "text-warning-emphasis" : "") mb-0">
+                        @Model.PendingVerificationCount Yoklama
+                        @if (Model.PendingFeeDecisionCount > 0)
+                        {
+                            <span>• @Model.PendingFeeDecisionCount Ücret Kararı</span>
+                        }
                     </div>
-                    <div class="small text-muted mt-1">Saati geçen dersler otomatik tamamlanmaz</div>
+                    <div class="small text-muted mt-1">Otomatik tamamlanmaz veya otomatik borç oluşmaz</div>
                 </div>
-                @if (Model.PendingVerificationCount > 0)
+                @if ((Model.PendingVerificationCount + Model.PendingFeeDecisionCount) > 0)
                 {
                     <div class="mt-2">
                         <a class="small fw-semibold text-decoration-none"
                            asp-controller="Schedule"
                            asp-action="PendingAttendance"
                            asp-route-date="@Model.WeekStartDate.ToString("yyyy-MM-dd")">
-                            Toplu Yoklama Tamamla →
+                            Bekleyen İşlemleri Tamamla →
                         </a>
                     </div>
                 }
@@ -223,7 +227,7 @@
                                         </div>
                                     }
 
-                                    <!-- Kart İşlemleri: Yoklama Hızlı Onay, Detay, Düzenle, Ertele, İptal Et / Yeniden Aktif Et -->
+                                    <!-- Kart İşlemleri: Yoklama Hızlı Onay, Devamsızlık Ücret Kararı, Detay, Düzenle, Ertele, İptal Et / Yeniden Aktif Et -->
                                     @if (lesson.IsPendingAttendanceVerification)
                                     {
                                         <div class="mt-2 pt-2 border-top d-flex flex-wrap align-items-center justify-content-between gap-1">
@@ -249,8 +253,40 @@
                                                     <input type="hidden" name="LessonId" value="@lesson.LessonId" />
                                                     <input type="hidden" name="AttendanceStatus" value="@LessonAttendanceStatus.Absent" />
                                                     <input type="hidden" name="ReturnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2" title="Öğrenci derse gelmedi">
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2" title="Öğrenci derse gelmedi (Ücret kararı ayrıca seçilir)">
                                                         ✕ Gelmedi
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    }
+                                    else if (lesson.IsPendingFeeDecision)
+                                    {
+                                        <div class="mt-2 pt-2 border-top d-flex flex-wrap align-items-center justify-content-between gap-1">
+                                            <span class="small fw-semibold text-warning-emphasis">Ücret?</span>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <form asp-controller="Schedule"
+                                                      asp-action="SetFeeDecision"
+                                                      method="post"
+                                                      class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="LessonId" value="@lesson.LessonId" />
+                                                    <input type="hidden" name="FeeDecision" value="@LessonFeeDecision.Waive" />
+                                                    <input type="hidden" name="ReturnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                                                    <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2" title="Bu devamsızlık için ücret alınmayacak (0 TL)">
+                                                        Alınmayacak
+                                                    </button>
+                                                </form>
+                                                <form asp-controller="Schedule"
+                                                      asp-action="SetFeeDecision"
+                                                      method="post"
+                                                      class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="LessonId" value="@lesson.LessonId" />
+                                                    <input type="hidden" name="FeeDecision" value="@LessonFeeDecision.Charge" />
+                                                    <input type="hidden" name="ReturnDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                                                    <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-2" title="Bu devamsızlık için ders ücreti alınacak">
+                                                        Ücret Al
                                                     </button>
                                                 </form>
                                             </div>

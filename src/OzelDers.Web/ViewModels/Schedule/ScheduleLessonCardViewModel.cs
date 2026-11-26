@@ -40,6 +40,12 @@ public class ScheduleLessonCardViewModel
 
     public DateTime? AttendanceVerifiedAtUtc { get; init; }
 
+    public LessonFeeDecision FeeDecision { get; init; }
+
+    public DateTime? FeeDecisionAtUtc { get; init; }
+
+    public string? FeeDecisionReason { get; init; }
+
     public string? Notes { get; init; }
 
     /// <summary>
@@ -47,6 +53,14 @@ public class ScheduleLessonCardViewModel
     /// ve ders iptal edilmemişse yoklama doğrulaması bekliyor demektir (FR-060, FR-061).
     /// </summary>
     public bool IsPendingAttendanceVerification { get; init; }
+
+    /// <summary>
+    /// Öğrenci gelmedi (Absent) olarak işaretlenmiş ancak öğretmen bu ders için henüz ücret kararını
+    /// (Charge veya Waive) vermemişse ücret kararı bekliyor demektir (BR-02, BR-03, FR-065, FR-066).
+    /// </summary>
+    public bool IsPendingFeeDecision =>
+        AttendanceStatus == LessonAttendanceStatus.Absent &&
+        FeeDecision == LessonFeeDecision.Pending;
 
     public bool IsCancelled => Status == LessonStatus.Cancelled;
 
@@ -64,10 +78,13 @@ public class ScheduleLessonCardViewModel
         AttendanceStatus switch
         {
             LessonAttendanceStatus.Attended => "Geldi • Tamamlandı",
-            LessonAttendanceStatus.Absent => "Gelmedi",
+            LessonAttendanceStatus.Absent when FeeDecision == LessonFeeDecision.Charge => "Gelmedi • Ücret Alınacak",
+            LessonAttendanceStatus.Absent when FeeDecision == LessonFeeDecision.Waive => "Gelmedi • Ücret Alınmayacak",
+            LessonAttendanceStatus.Absent => "Gelmedi • Ücret Kararı Bekliyor",
             _ => Status switch
             {
                 LessonStatus.Completed => "Tamamlandı",
+                LessonStatus.Cancelled when FeeDecision == LessonFeeDecision.Charge => "İptal • Ücret Alınacak",
                 LessonStatus.Cancelled => "İptal Edildi",
                 LessonStatus.Rescheduled when IsPendingAttendanceVerification => "Ertelendi • Yoklama Bekliyor",
                 LessonStatus.Rescheduled => "Ertelendi",
@@ -80,6 +97,7 @@ public class ScheduleLessonCardViewModel
         AttendanceStatus switch
         {
             LessonAttendanceStatus.Attended => "bg-success-subtle text-success-emphasis",
+            LessonAttendanceStatus.Absent when FeeDecision == LessonFeeDecision.Pending => "bg-warning-subtle text-warning-emphasis",
             LessonAttendanceStatus.Absent => "bg-danger-subtle text-danger-emphasis",
             _ => Status switch
             {

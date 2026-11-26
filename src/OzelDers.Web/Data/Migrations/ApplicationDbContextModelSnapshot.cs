@@ -282,6 +282,18 @@ namespace OzelDers.Web.Data.Migrations
                     b.Property<DateTime>("EndUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("FeeDecision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("FeeDecisionAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FeeDecisionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<decimal>("HourlyRateSnapshot")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");

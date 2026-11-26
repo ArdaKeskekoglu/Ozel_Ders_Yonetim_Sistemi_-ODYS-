@@ -58,6 +58,8 @@ public class WeeklyScheduleViewModel
 
     public int PendingVerificationCount { get; init; }
 
+    public int PendingFeeDecisionCount { get; init; }
+
     public int TotalActiveMinutes { get; init; }
 
     public decimal TotalActiveFeeSnapshot { get; init; }

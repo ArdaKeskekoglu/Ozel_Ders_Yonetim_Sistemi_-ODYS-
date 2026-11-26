@@ -41,6 +41,15 @@ public class LessonConfiguration : IEntityTypeConfiguration<Lesson>
 
         builder.Property(l => l.AttendanceVerifiedAtUtc);
 
+        builder.Property(l => l.FeeDecision)
+            .IsRequired()
+            .HasDefaultValue(LessonFeeDecision.Pending);
+
+        builder.Property(l => l.FeeDecisionAtUtc);
+
+        builder.Property(l => l.FeeDecisionReason)
+            .HasMaxLength(500);
+
         builder.Property(l => l.Notes)
             .HasMaxLength(1000);
 

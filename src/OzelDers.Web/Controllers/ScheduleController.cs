@@ -403,4 +403,42 @@ public class ScheduleController : Controller
             nameof(PendingAttendance),
             model.FilterDate.HasValue ? new { date = model.FilterDate.Value.ToString("yyyy-MM-dd") } : null);
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetFeeDecision(
+        SetLessonFeeDecisionInputViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        var teacherId = _currentTeacherService.GetRequiredTeacherId();
+        var result = await _scheduleService.SetLessonFeeDecisionAsync(
+            teacherId,
+            model,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            TempData["ErrorMessage"] = result.Errors.FirstOrDefault() ?? "Ücret kararı kaydedilemedi.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = result.InfoMessage;
+        }
+
+        if (model.ReturnToPendingCenter)
+        {
+            return RedirectToAction(
+                nameof(PendingAttendance),
+                model.ReturnDate.HasValue ? new { date = model.ReturnDate.Value.ToString("yyyy-MM-dd") } : null);
+        }
+
+        if (model.ReturnToDetails)
+        {
+            return RedirectToAction(nameof(Details), new { id = model.LessonId });
+        }
+
+        return RedirectToAction(
+            nameof(Index),
+            model.ReturnDate.HasValue ? new { date = model.ReturnDate.Value.ToString("yyyy-MM-dd") } : null);
+    }
 }

@@ -214,6 +214,9 @@ public class StudentService : IStudentService
                     Status = l.Status,
                     AttendanceStatus = l.AttendanceStatus,
                     AttendanceVerifiedAtUtc = l.AttendanceVerifiedAtUtc,
+                    FeeDecision = l.FeeDecision,
+                    FeeDecisionAtUtc = l.FeeDecisionAtUtc,
+                    FeeDecisionReason = l.FeeDecisionReason,
                     Notes = l.Notes,
                     IsPendingAttendanceVerification = isPending
                 };

@@ -129,6 +129,7 @@ public class ScheduleService : IScheduleService
             CompletedLessonCount = lessonCards.Count(l => l.Status == LessonStatus.Completed),
             CancelledLessonCount = lessonCards.Count(l => l.Status == LessonStatus.Cancelled),
             PendingVerificationCount = lessonCards.Count(l => l.IsPendingAttendanceVerification),
+            PendingFeeDecisionCount = lessonCards.Count(l => l.IsPendingFeeDecision),
             TotalActiveMinutes = activeLessons.Sum(l => l.DurationMinutes),
             TotalActiveFeeSnapshot = activeLessons.Sum(l => l.SessionFeeSnapshot),
             Days = days
@@ -222,6 +223,9 @@ public class ScheduleService : IScheduleService
             Status = lesson.Status,
             AttendanceStatus = lesson.AttendanceStatus,
             AttendanceVerifiedAtUtc = lesson.AttendanceVerifiedAtUtc,
+            FeeDecision = lesson.FeeDecision,
+            FeeDecisionAtUtc = lesson.FeeDecisionAtUtc,
+            FeeDecisionReason = lesson.FeeDecisionReason,
             IsPendingAttendanceVerification = isPendingAttendance,
             Notes = lesson.Notes,
             CreatedAtUtc = lesson.CreatedAtUtc,
@@ -625,6 +629,8 @@ public class ScheduleService : IScheduleService
                 lesson.Status = LessonStatus.Cancelled;
                 lesson.AttendanceStatus = LessonAttendanceStatus.NotApplicable;
                 lesson.AttendanceVerifiedAtUtc = DateTime.UtcNow;
+                lesson.FeeDecision = LessonFeeDecision.Waive;
+                lesson.FeeDecisionAtUtc = DateTime.UtcNow;
 
                 if (!string.IsNullOrWhiteSpace(cancelReason))
                 {
@@ -697,6 +703,9 @@ public class ScheduleService : IScheduleService
                 lesson.Status = LessonStatus.Scheduled;
                 lesson.AttendanceStatus = LessonAttendanceStatus.Pending;
                 lesson.AttendanceVerifiedAtUtc = null;
+                lesson.FeeDecision = LessonFeeDecision.Pending;
+                lesson.FeeDecisionAtUtc = null;
+                lesson.FeeDecisionReason = null;
                 await _dbContext.SaveChangesAsync(ct);
 
                 var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
@@ -838,6 +847,9 @@ public class ScheduleService : IScheduleService
                 lesson.Status = LessonStatus.Rescheduled;
                 lesson.AttendanceStatus = LessonAttendanceStatus.Pending;
                 lesson.AttendanceVerifiedAtUtc = null;
+                lesson.FeeDecision = LessonFeeDecision.Pending;
+                lesson.FeeDecisionAtUtc = null;
+                lesson.FeeDecisionReason = null;
                 lesson.Notes = AppendNoteWithLimit(lesson.Notes, trail);
 
                 await _dbContext.SaveChangesAsync(ct);
@@ -934,6 +946,8 @@ public class ScheduleService : IScheduleService
                         lesson.AttendanceStatus = LessonAttendanceStatus.Attended;
                         lesson.Status = LessonStatus.Completed;
                         lesson.AttendanceVerifiedAtUtc = utcNow;
+                        lesson.FeeDecision = LessonFeeDecision.Charge;
+                        lesson.FeeDecisionAtUtc = utcNow;
                         statusText = "Öğrenci Geldi (Ders Tamamlandı)";
                         break;
 
@@ -944,7 +958,23 @@ public class ScheduleService : IScheduleService
                             lesson.Status = LessonStatus.Scheduled;
                         }
                         lesson.AttendanceVerifiedAtUtc = utcNow;
-                        statusText = "Öğrenci Gelmedi (Devamsızlık)";
+
+                        // BR-02, FR-065, FR-066: Öğrenci gelmediğinde otomatik borç (Charge) oluşturulmaz;
+                        // öğretmen açıkça Charge veya Waive seçmediyse Pending (Ücret Kararı Bekliyor) kalır.
+                        if (model.FeeDecision is LessonFeeDecision.Charge or LessonFeeDecision.Waive)
+                        {
+                            lesson.FeeDecision = model.FeeDecision.Value;
+                            lesson.FeeDecisionAtUtc = utcNow;
+                            statusText = model.FeeDecision.Value == LessonFeeDecision.Charge
+                                ? "Öğrenci Gelmedi • Ücret Alınacak"
+                                : "Öğrenci Gelmedi • Ücret Alınmayacak";
+                        }
+                        else
+                        {
+                            lesson.FeeDecision = LessonFeeDecision.Pending;
+                            lesson.FeeDecisionAtUtc = null;
+                            statusText = "Öğrenci Gelmedi (Ücret Kararı Bekliyor)";
+                        }
                         break;
 
                     case LessonAttendanceStatus.NotApplicable:
@@ -956,7 +986,13 @@ public class ScheduleService : IScheduleService
                         lesson.AttendanceStatus = LessonAttendanceStatus.NotApplicable;
                         lesson.Status = LessonStatus.Cancelled;
                         lesson.AttendanceVerifiedAtUtc = utcNow;
-                        statusText = "Ders İptal Edildi";
+                        lesson.FeeDecision = model.FeeDecision is LessonFeeDecision.Charge
+                            ? LessonFeeDecision.Charge
+                            : LessonFeeDecision.Waive;
+                        lesson.FeeDecisionAtUtc = utcNow;
+                        statusText = lesson.FeeDecision == LessonFeeDecision.Charge
+                            ? "Ders İptal Edildi • Ücret Alınacak"
+                            : "Ders İptal Edildi";
                         break;
 
                     case LessonAttendanceStatus.Pending:
@@ -966,6 +1002,9 @@ public class ScheduleService : IScheduleService
                             lesson.Status = LessonStatus.Scheduled;
                         }
                         lesson.AttendanceVerifiedAtUtc = null;
+                        lesson.FeeDecision = LessonFeeDecision.Pending;
+                        lesson.FeeDecisionAtUtc = null;
+                        lesson.FeeDecisionReason = null;
                         statusText = "Yoklama Bekliyor";
                         break;
 
@@ -1053,43 +1092,80 @@ public class ScheduleService : IScheduleService
             .ToListAsync(cancellationToken);
 
         var items = rawLessons
-            .Select(l =>
-            {
-                var startUtc = DateTime.SpecifyKind(l.StartUtc, DateTimeKind.Utc);
-                var endUtc = DateTime.SpecifyKind(l.EndUtc, DateTimeKind.Utc);
-                var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
-                var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endUtc, _timeZone);
-                var lessonDate = DateOnly.FromDateTime(startLocal);
+            .Select(l => MapToPendingAttendanceItem(l))
+            .ToList();
 
-                return new PendingAttendanceItemViewModel
-                {
-                    LessonId = l.Id,
-                    StudentSubjectId = l.StudentSubjectId,
-                    StudentId = l.StudentSubject!.StudentId,
-                    StudentFullName = l.StudentSubject.Student!.FullName,
-                    SubjectId = l.StudentSubject.SubjectId,
-                    SubjectName = l.StudentSubject.Subject!.Name,
-                    LessonDate = lessonDate,
-                    DayNameTr = GetTurkishDayName(lessonDate.DayOfWeek),
-                    StartUtc = startUtc,
-                    EndUtc = endUtc,
-                    StartLocal = startLocal,
-                    EndLocal = endLocal,
-                    DurationMinutes = l.DurationMinutes,
-                    HourlyRateSnapshot = l.HourlyRateSnapshot,
-                    SessionFeeSnapshot = l.SessionFeeSnapshot,
-                    Status = l.Status,
-                    AttendanceStatus = l.AttendanceStatus,
-                    Notes = l.Notes
-                };
-            })
+        // BR-02, BR-03, FR-065, FR-066: Öğrenci Gelmedi (Absent) olarak işaretlenmiş ancak öğretmenin henüz
+        // ücret alınıp alınmayacağını (Charge / Waive) seçmediği dersleri de ayrı listede getir.
+        var pendingFeeQuery = _dbContext.Lessons
+            .AsNoTracking()
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Student)
+            .Include(l => l.StudentSubject)
+            .ThenInclude(ss => ss!.Subject)
+            .Where(l =>
+                l.AttendanceStatus == LessonAttendanceStatus.Absent &&
+                l.FeeDecision == LessonFeeDecision.Pending &&
+                l.StudentSubject != null &&
+                l.StudentSubject.Student != null &&
+                l.StudentSubject.Student.TeacherId == teacherId &&
+                l.StudentSubject.Subject != null &&
+                l.StudentSubject.Subject.TeacherId == teacherId);
+
+        if (weekStartUtc.HasValue && nextWeekStartUtc.HasValue)
+        {
+            var startBound = weekStartUtc.Value;
+            var endBound = nextWeekStartUtc.Value;
+            pendingFeeQuery = pendingFeeQuery.Where(l => l.StartUtc >= startBound && l.StartUtc < endBound);
+        }
+
+        var rawPendingFeeLessons = await pendingFeeQuery
+            .OrderBy(l => l.StartUtc)
+            .ThenBy(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var pendingFeeItems = rawPendingFeeLessons
+            .Select(l => MapToPendingAttendanceItem(l))
             .ToList();
 
         return new PendingAttendanceListViewModel
         {
             FilterWeekStartDate = filterWeekStart,
             FilterWeekRangeTitle = filterWeekTitle,
-            Items = items
+            Items = items,
+            PendingFeeDecisionItems = pendingFeeItems
+        };
+    }
+
+    private PendingAttendanceItemViewModel MapToPendingAttendanceItem(Lesson l)
+    {
+        var startUtc = DateTime.SpecifyKind(l.StartUtc, DateTimeKind.Utc);
+        var endUtc = DateTime.SpecifyKind(l.EndUtc, DateTimeKind.Utc);
+        var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startUtc, _timeZone);
+        var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endUtc, _timeZone);
+        var lessonDate = DateOnly.FromDateTime(startLocal);
+
+        return new PendingAttendanceItemViewModel
+        {
+            LessonId = l.Id,
+            StudentSubjectId = l.StudentSubjectId,
+            StudentId = l.StudentSubject!.StudentId,
+            StudentFullName = l.StudentSubject.Student!.FullName,
+            SubjectId = l.StudentSubject.SubjectId,
+            SubjectName = l.StudentSubject.Subject!.Name,
+            LessonDate = lessonDate,
+            DayNameTr = GetTurkishDayName(lessonDate.DayOfWeek),
+            StartUtc = startUtc,
+            EndUtc = endUtc,
+            StartLocal = startLocal,
+            EndLocal = endLocal,
+            DurationMinutes = l.DurationMinutes,
+            HourlyRateSnapshot = l.HourlyRateSnapshot,
+            SessionFeeSnapshot = l.SessionFeeSnapshot,
+            Status = l.Status,
+            AttendanceStatus = l.AttendanceStatus,
+            FeeDecision = l.FeeDecision,
+            Notes = l.Notes
         };
     }
 
@@ -1161,6 +1237,8 @@ public class ScheduleService : IScheduleService
                             lesson.AttendanceStatus = LessonAttendanceStatus.Attended;
                             lesson.Status = LessonStatus.Completed;
                             lesson.AttendanceVerifiedAtUtc = utcNow;
+                            lesson.FeeDecision = LessonFeeDecision.Charge;
+                            lesson.FeeDecisionAtUtc = utcNow;
                             break;
 
                         case LessonAttendanceStatus.Absent:
@@ -1170,12 +1248,26 @@ public class ScheduleService : IScheduleService
                                 lesson.Status = LessonStatus.Scheduled;
                             }
                             lesson.AttendanceVerifiedAtUtc = utcNow;
+                            if (model.FeeDecision is LessonFeeDecision.Charge or LessonFeeDecision.Waive)
+                            {
+                                lesson.FeeDecision = model.FeeDecision.Value;
+                                lesson.FeeDecisionAtUtc = utcNow;
+                            }
+                            else
+                            {
+                                lesson.FeeDecision = LessonFeeDecision.Pending;
+                                lesson.FeeDecisionAtUtc = null;
+                            }
                             break;
 
                         case LessonAttendanceStatus.NotApplicable:
                             lesson.AttendanceStatus = LessonAttendanceStatus.NotApplicable;
                             lesson.Status = LessonStatus.Cancelled;
                             lesson.AttendanceVerifiedAtUtc = utcNow;
+                            lesson.FeeDecision = model.FeeDecision is LessonFeeDecision.Charge
+                                ? LessonFeeDecision.Charge
+                                : LessonFeeDecision.Waive;
+                            lesson.FeeDecisionAtUtc = utcNow;
                             break;
                     }
 
@@ -1194,6 +1286,90 @@ public class ScheduleService : IScheduleService
                     $"Seçilen {lessons.Count} ders oturumunun yoklaması '{statusText}' olarak topluca tamamlandı.",
                     Array.Empty<string>(),
                     lessons.Count);
+            },
+            cancellationToken);
+    }
+
+    public async Task<ScheduleLessonOperationResult> SetLessonFeeDecisionAsync(
+        string teacherId,
+        SetLessonFeeDecisionInputViewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (string.IsNullOrWhiteSpace(teacherId))
+        {
+            return Fail("Öğretmen kimliği doğrulanamadı.");
+        }
+
+        if (model.FeeDecision is not (LessonFeeDecision.Charge or LessonFeeDecision.Waive))
+        {
+            return Fail("Lütfen bu ders oturumu için 'Ücret Alınacak' veya 'Ücret Alınmayacak (Muaf)' seçeneklerinden birini belirleyiniz.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Reason) && model.Reason.Trim().Length > 500)
+        {
+            return Fail("Ücret kararı açıklaması en fazla 500 karakter olabilir.");
+        }
+
+        return await ExecuteTeacherAtomicScheduleWriteAsync(
+            teacherId,
+            async ct =>
+            {
+                var lesson = await GetOwnedLessonAsync(teacherId, model.LessonId, ct);
+                if (lesson is null || lesson.StudentSubject?.Student is null || lesson.StudentSubject.Subject is null)
+                {
+                    return Fail("Ücret kararı belirlenmek istenen ders oturumu bulunamadı veya bu ders üzerinde yetkiniz yok.");
+                }
+
+                if (lesson.AttendanceStatus == LessonAttendanceStatus.Pending && lesson.Status != LessonStatus.Cancelled)
+                {
+                    return Fail("Ücret kararı belirlemeden önce dersin yoklama durumunu (Geldi / Gelmedi / İptal) doğrulamalısınız.");
+                }
+
+                if (lesson.AttendanceStatus == LessonAttendanceStatus.Attended && model.FeeDecision == LessonFeeDecision.Waive)
+                {
+                    return Fail("Öğrencinin katıldığı ve tamamlanan bir derste devamsızlık muafiyeti uygulanamaz.");
+                }
+
+                var previousDecision = lesson.FeeDecision;
+                var utcNow = DateTime.UtcNow;
+
+                lesson.FeeDecision = model.FeeDecision;
+                lesson.FeeDecisionAtUtc = utcNow;
+                lesson.FeeDecisionReason = string.IsNullOrWhiteSpace(model.Reason) ? null : model.Reason.Trim();
+
+                var decisionText = model.FeeDecision == LessonFeeDecision.Charge
+                    ? $"Ücret Alınacak ({lesson.SessionFeeSnapshot:N2} ₺)"
+                    : "Ücret Alınmayacak / Muaf (0,00 ₺)";
+
+                var isCorrection = previousDecision != LessonFeeDecision.Pending && previousDecision != model.FeeDecision;
+                var auditLabel = isCorrection ? "Ücret Kararı Düzeltildi" : "Ücret Kararı";
+                var auditEntry = string.IsNullOrWhiteSpace(model.Reason)
+                    ? $"[{auditLabel}: {decisionText}]"
+                    : $"[{auditLabel}: {decisionText} — {model.Reason.Trim()}]";
+
+                lesson.Notes = AppendNoteWithLimit(lesson.Notes, auditEntry);
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                var startLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(lesson.StartUtc, DateTimeKind.Utc),
+                    _timeZone);
+
+                var studentName = lesson.StudentSubject.Student.FullName;
+                var subjectName = lesson.StudentSubject.Subject.Name;
+
+                var infoMessage = isCorrection
+                    ? $"{studentName} — '{subjectName}' ({startLocal:dd.MM.yyyy HH:mm}) dersi için ücretlendirme kararı '{decisionText}' olarak güncellendi."
+                    : $"{studentName} — '{subjectName}' ({startLocal:dd.MM.yyyy HH:mm}) dersi için ücretlendirme kararı '{decisionText}' olarak kaydedildi.";
+
+                return new ScheduleLessonOperationResult(
+                    true,
+                    lesson,
+                    infoMessage,
+                    Array.Empty<string>(),
+                    1);
             },
             cancellationToken);
     }
@@ -1250,6 +1426,9 @@ public class ScheduleService : IScheduleService
             Status = l.Status,
             AttendanceStatus = l.AttendanceStatus,
             AttendanceVerifiedAtUtc = l.AttendanceVerifiedAtUtc,
+            FeeDecision = l.FeeDecision,
+            FeeDecisionAtUtc = l.FeeDecisionAtUtc,
+            FeeDecisionReason = l.FeeDecisionReason,
             Notes = l.Notes,
             IsPendingAttendanceVerification = isPendingAttendance
         };

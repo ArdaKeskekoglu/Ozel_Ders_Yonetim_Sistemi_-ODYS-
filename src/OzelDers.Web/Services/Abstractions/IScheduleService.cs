@@ -95,6 +95,11 @@ public interface IScheduleService
         BatchRecordAttendanceInputViewModel model,
         CancellationToken cancellationToken = default);
 
+    Task<ScheduleLessonOperationResult> SetLessonFeeDecisionAsync(
+        string teacherId,
+        SetLessonFeeDecisionInputViewModel model,
+        CancellationToken cancellationToken = default);
+
     Task<bool> HasTimeConflictAsync(
         string teacherId,
         DateTime startUtc,
